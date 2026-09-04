@@ -21,11 +21,11 @@ struct MarkdownTextView: View {
         case .heading(let level, let text):
             Text(text)
                 .font(headingFont(level))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.textPrimary)
                 .padding(.top, 2)
 
         case .paragraph(let text):
-            InlineFormattedText(text: text, size: 15)
+            InlineFormattedText(text: text, size: 15, color: .textPrimary)
 
         case .code(let language, let content):
             CodeBlockView(language: language, content: content)
@@ -36,7 +36,7 @@ struct MarkdownTextView: View {
                     .fill(LinearGradient(colors: [Color.liuliTeal, Color.liuliIndigo],
                                          startPoint: .top, endPoint: .bottom))
                     .frame(width: 3)
-                InlineFormattedText(text: text, size: 13, color: Color.liuliTextSecondary)
+                InlineFormattedText(text: text, size: 13, color: .textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -46,14 +46,14 @@ struct MarkdownTextView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.liuliAccent)
                     .frame(minWidth: 16, alignment: .trailing)
-                InlineFormattedText(text: text, size: 14)
+                InlineFormattedText(text: text, size: 14, color: .textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.leading, CGFloat(indent) * 16)
 
         case .divider:
             Rectangle()
-                .fill(Color.white.opacity(0.12))
+                .fill(Color.separator)
                 .frame(height: 0.6)
                 .padding(.vertical, 3)
 
@@ -77,7 +77,7 @@ struct MarkdownTextView: View {
 struct InlineFormattedText: View {
     let text: String
     var size: CGFloat = 14
-    var color: Color = .white
+    var color: Color = .textPrimary
 
     var body: some View {
         Text(attributed)
@@ -94,7 +94,7 @@ struct InlineFormattedText: View {
                 ? Color.liuliAccent
                 : (segment.bold ? color : color)
             if segment.code {
-                part.backgroundColor = Color.white.opacity(0.08)
+                part.backgroundColor = Color.textPrimary.opacity(0.07)
             }
             if segment.italic && !segment.bold {
                 part.font = .system(size: size).italic()
@@ -228,7 +228,7 @@ struct CodeBlockView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.white.opacity(0.05))
+            .background(Color.textPrimary.opacity(0.06))
 
             // 代码主体
             ScrollView(.horizontal, showsIndicators: false) {
@@ -266,22 +266,22 @@ struct MarkdownTableView: View {
                         InlineFormattedText(
                             text: cell,
                             size: 12,
-                            color: rowIndex == 0 ? Color.liuliAccent : Color.liuliTextPrimary
+                            color: rowIndex == 0 ? Color.liuliAccent : Color.textPrimary
                         )
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 7)
-                        .background(rowIndex == 0 ? Color.white.opacity(0.06) : Color.clear)
+                        .background(rowIndex == 0 ? Color.textPrimary.opacity(0.05) : Color.clear)
                     }
                 }
                 if rowIndex < rows.count - 1 {
-                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 0.5)
+                    Rectangle().fill(Color.separator).frame(height: 0.5)
                 }
             }
         }
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                .strokeBorder(Color.separator, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }

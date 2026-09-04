@@ -25,7 +25,8 @@ struct LiuLiApp: App {
                 .environmentObject(settings)
                 .environmentObject(router)
                 .environmentObject(store)
-                .preferredColorScheme(.dark) // 液态玻璃在深色背景下效果最佳
+                // 跟随系统深浅色（液态玻璃两套材质均已适配）
+                .preferredColorScheme(nil)
                 .tint(Color.liuliAccent)
         }
     }

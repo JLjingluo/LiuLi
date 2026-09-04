@@ -22,7 +22,7 @@ struct SettingsView: View {
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
-            .background(Color(red: 0.043, green: 0.055, blue: 0.11))
+            .background(Color.appBackground)
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
@@ -53,7 +53,7 @@ struct SettingsView: View {
         } footer: {
             Text("选择预设服务商或自定义任意 OpenAI 兼容接口。")
         }
-        .listRowBackground(Color.white.opacity(0.05))
+        .listRowBackground(Color.surfaceCard)
     }
 
     private func providerRow(_ preset: ProviderPreset) -> some View {
@@ -69,7 +69,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(preset.name)
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.textPrimary)
                     Text(preset.baseURL)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(Color.liuliTextTertiary)
@@ -95,7 +95,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("自定义")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.textPrimary)
                     Text(settings.customBaseURL.isEmpty ? "填写 Base URL" : settings.customBaseURL)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(Color.liuliTextTertiary)
@@ -150,7 +150,7 @@ struct SettingsView: View {
                 Text("仅保存在本机钥匙串，不会上传。")
             }
         }
-        .listRowBackground(Color.white.opacity(0.05))
+        .listRowBackground(Color.surfaceCard)
         .onChange(of: settings.apiKey) { _, newKey in
             // 外部变化（如无）同步
             if apiKeyInput != newKey { apiKeyInput = newKey }
@@ -235,7 +235,7 @@ struct SettingsView: View {
         } footer: {
             Text("识别到的模型可直接点选；列表为空时可手动输入模型名。")
         }
-        .listRowBackground(Color.white.opacity(0.05))
+        .listRowBackground(Color.surfaceCard)
         .onAppear {
             autoFetchIfReady()
         }
@@ -261,13 +261,13 @@ struct SettingsView: View {
         Section {
             Toggle("流式返回 Token 用量", isOn: $settings.includeUsage)
                 .font(.system(size: 14))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.textPrimary)
         } header: {
             Text("用量")
         } footer: {
             Text("个别服务商不支持 stream_options，若报错可关闭。")
         }
-        .listRowBackground(Color.white.opacity(0.05))
+        .listRowBackground(Color.surfaceCard)
     }
 
     private var aboutSection: some View {
@@ -277,7 +277,7 @@ struct SettingsView: View {
         } header: {
             Text("关于")
         }
-        .listRowBackground(Color.white.opacity(0.05))
+        .listRowBackground(Color.surfaceCard)
     }
 
     // MARK: 模型拉取
@@ -344,7 +344,7 @@ struct LabeledInput: View {
                 .autocapitalization(.none)
                 .autocorrectionDisabled()
                 .font(.system(size: 14, design: .monospaced))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.textPrimary)
         }
     }
 }
@@ -397,7 +397,7 @@ struct ModelPickerSheet: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(model)
                                             .font(.system(size: 13, design: .monospaced))
-                                            .foregroundStyle(.white)
+                                            .foregroundStyle(Color.textPrimary)
                                         if VisionCapability.likelySupportsVision(modelID: model) {
                                             Text("支持图片识别")
                                                 .font(.system(size: 10, weight: .medium))
@@ -414,13 +414,13 @@ struct ModelPickerSheet: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .listRowBackground(Color.white.opacity(0.05))
+                    .listRowBackground(Color.surfaceCard)
                 }
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .searchable(text: $search, prompt: "搜索模型")
-            .background(Color(red: 0.043, green: 0.055, blue: 0.11))
+            .background(Color.appBackground)
             .navigationTitle("选择模型")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)

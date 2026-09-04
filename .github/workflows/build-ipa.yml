@@ -7,13 +7,20 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    # macos-26 带 Xcode 26（iOS 26 SDK，原生 Liquid Glass）
+    runs-on: macos-26
+
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 选择 Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode_16.app || true
+      - name: 选择最新 Xcode
+        run: |
+          # 自动选取机器上可用的最新 Xcode（26 优先，其次 16、15.4）
+          LATEST=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          echo "使用 $LATEST"
+          sudo xcode-select -s "$LATEST"
+          xcodebuild -version
 
       - name: 构建（未签名）
         run: |

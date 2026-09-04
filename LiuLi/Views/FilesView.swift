@@ -68,7 +68,7 @@ struct DirectoryListView: View {
         .id(refreshToken)
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color(red: 0.043, green: 0.055, blue: 0.11))
+        .background(Color.appBackground)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
@@ -178,7 +178,7 @@ struct DirectoryListView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.textPrimary)
                     .lineLimit(1)
                 if !entry.isDirectory {
                     Text(ByteCountFormatter.string(fromByteCount: Int64(entry.size), countStyle: .file))
@@ -294,7 +294,7 @@ struct EditorView: View {
         TextEditor(text: $content)
             .font(.system(size: 13, design: .monospaced))
             .scrollContentBackground(.hidden)
-            .background(Color(red: 0.03, green: 0.04, blue: 0.08))
+            .background(Color.appBackground)
             .padding(.horizontal, 8)
             .navigationTitle(fileURL.lastPathComponent)
             .navigationBarTitleDisplayMode(.inline)

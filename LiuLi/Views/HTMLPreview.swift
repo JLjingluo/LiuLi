@@ -72,7 +72,7 @@ struct HTMLPreviewSheet: View {
                         .id(reloadToken)
                 }
             }
-            .background(Color(red: 0.043, green: 0.055, blue: 0.11))
+            .background(Color.appBackground)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)

@@ -28,7 +28,7 @@ struct ConversationListView: View {
                             .foregroundStyle(Color.liuliViolet)
                     }
                 }
-                .listRowBackground(Color.white.opacity(0.05))
+                .listRowBackground(Color.surfaceCard)
 
                 Section("历史会话") {
                     ForEach(store.conversations) { conv in
@@ -36,11 +36,11 @@ struct ConversationListView: View {
                     }
                     .onDelete(perform: delete)
                 }
-                .listRowBackground(Color.white.opacity(0.05))
+                .listRowBackground(Color.surfaceCard)
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
-            .background(Color(red: 0.043, green: 0.055, blue: 0.11))
+            .background(Color.appBackground)
             .navigationTitle("对话")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -67,7 +67,7 @@ struct ConversationListView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(conv.title)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.textPrimary)
                         .lineLimit(1)
                     Text("\(conv.messages.count) 条消息 · \(conv.updatedAt.formatted(.relative(presentation: .named)))")
                         .font(.system(size: 11))

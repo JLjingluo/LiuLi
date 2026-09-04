@@ -1,5 +1,9 @@
 import SwiftUI
 
+// MARK: - 根视图（液态玻璃 Tab 容器）
+// iOS 26：原生 TabBar 已是 Liquid Glass 材质，直接使用
+// iOS 17~25：系统 TabBar + ultraThinMaterial 后台弥散背景
+
 struct RootView: View {
     @EnvironmentObject private var router: AppRouter
 

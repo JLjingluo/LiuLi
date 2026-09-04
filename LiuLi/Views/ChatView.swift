@@ -37,10 +37,10 @@ struct ChatView: View {
                 }
                 messageList
             }
-            // 悬浮液态玻璃输入胶囊：消息流从玻璃下方滚过，产生真实折射
+            // 悬浮液态玻璃输入胶囊：收窄悬浮（消息从玻璃下方滚过折射）
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 inputBar
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 24)
                     .padding(.top, 8)
                     .padding(.bottom, 8)
                     .liquidGlass(cornerRadius: 26)

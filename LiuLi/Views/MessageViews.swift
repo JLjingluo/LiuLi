@@ -87,7 +87,7 @@ struct MessageBubble: View {
                         UnevenRoundedRectangle(
                             cornerRadii: .init(
                                 topLeading: 18, bottomLeading: 18,
-                                topTrailing: 18, bottomTrailing: 6),
+                                bottomTrailing: 6, topTrailing: 18),
                             style: .continuous
                         )
                         .fill(Color.userBubble)

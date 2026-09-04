@@ -49,7 +49,36 @@ final class AppSettings: ObservableObject {
         static let outputPricePerM = "settings.outputPricePerM"
         static let pricingCustomized = "settings.pricingCustomized"
         static let promptOptimizerEnabled = "settings.promptOptimizerEnabled"
+        static let systemPromptLite = "settings.systemPromptLite"
+        static let systemPromptDeep = "settings.systemPromptDeep"
     }
+
+    // MARK: 默认注入提示词（设置页可编辑，可一键恢复）
+
+    /// 快速模式默认（保持精简，控制 Token 消耗）
+    static let defaultLiteSystemPrompt = """
+    你是「璇玑」，一个简洁高效的中文 AI 助手。
+    - 用简体中文回答，直击要点，短问题给短答案
+    - 默认不使用 Markdown 标题与加粗，直接给结论
+    - 信息不足时先反问一句再作答，不做长篇铺垫
+    """
+
+    /// 深度模式默认（Agent 规范：文件工具 + 编码约定）
+    static let defaultDeepSystemPrompt = """
+    你是「璇玑」，一个专业的 AI 编程与文件助手，运行在 iPhone 上。
+
+    ## 工具
+    工作区（App 沙盒 Documents）内的文件通过工具访问：list_files 列目录、read_file 读文件、write_file 写文件（自动创建父目录）、delete_file 删除。涉及文件操作时优先用工具完成，而不是只给建议；修改文件前先 read_file 了解现状，避免覆盖未知内容。
+
+    ## 编码规范
+    - 代码放入代码块并标注语言
+    - HTML/CSS/JS 保证手机 Safari 直接打开可用：自包含、无外部依赖、包含 viewport
+    - 小程序类需求输出单个完整文件，不要拆成多个文件增加用户负担
+
+    ## 回答风格
+    - 使用 Markdown 排版，先给结论或成果，再给必要说明
+    - 给完整可运行代码，不用伪代码或「此处省略」占位
+    """
 
     /// 模型价格（元 / 百万 tokens）
     struct ModelPricing: Equatable {
@@ -124,6 +153,14 @@ final class AppSettings: ObservableObject {
     /// 提示词优化（输入框右下角魔法棒）
     @Published var promptOptimizerEnabled: Bool {
         didSet { d.set(promptOptimizerEnabled, forKey: Keys.promptOptimizerEnabled) }
+    }
+    /// 快速模式注入提示词（System Prompt）
+    @Published var systemPromptLite: String {
+        didSet { d.set(systemPromptLite, forKey: Keys.systemPromptLite) }
+    }
+    /// 深度模式注入提示词（System Prompt）
+    @Published var systemPromptDeep: String {
+        didSet { d.set(systemPromptDeep, forKey: Keys.systemPromptDeep) }
     }
     /// 用户是否手动改过单价（决定切模型时是否自动跟随建议价）
     private var pricingCustomized: Bool
@@ -226,6 +263,17 @@ final class AppSettings: ObservableObject {
             self.outputPricePerM = p.output
         }
         self.promptOptimizerEnabled = defaults.object(forKey: Keys.promptOptimizerEnabled) as? Bool ?? true
+        self.systemPromptLite = defaults.string(forKey: Keys.systemPromptLite) ?? Self.defaultLiteSystemPrompt
+        self.systemPromptDeep = defaults.string(forKey: Keys.systemPromptDeep) ?? Self.defaultDeepSystemPrompt
+    }
+
+    /// 恢复某个模式的默认注入提示词
+    func resetSystemPrompt(lite: Bool) {
+        if lite {
+            systemPromptLite = Self.defaultLiteSystemPrompt
+        } else {
+            systemPromptDeep = Self.defaultDeepSystemPrompt
+        }
     }
 
     /// 切模型时自动跟随建议单价（用户手动改过则不动）

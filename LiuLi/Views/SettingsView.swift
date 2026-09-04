@@ -19,6 +19,7 @@ struct SettingsView: View {
                 modelSection
                 usageSection
                 optimizerSection
+                systemPromptSection
                 aboutSection
             }
             .listStyle(.insetGrouped)
@@ -322,6 +323,46 @@ struct SettingsView: View {
         .listRowBackground(Color.surfaceCard)
     }
 
+    // MARK: 注入提示词（System Prompt）
+
+    private var systemPromptSection: some View {
+        Section {
+            NavigationLink {
+                SystemPromptEditorView(isLite: true)
+            } label: {
+                promptRow(title: "快速模式提示词", text: settings.systemPromptLite,
+                          defaultText: AppSettings.defaultLiteSystemPrompt)
+            }
+            NavigationLink {
+                SystemPromptEditorView(isLite: false)
+            } label: {
+                promptRow(title: "深度模式提示词", text: settings.systemPromptDeep,
+                          defaultText: AppSettings.defaultDeepSystemPrompt)
+            }
+        } header: {
+            Text("注入提示词")
+        } footer: {
+            Text("每次对话开头自动注入的系统提示词，决定 AI 的人设与行为规范。快速模式建议保持简短以节省 Token；深度模式可写入文件工具用法与编码约定。")
+        }
+        .listRowBackground(Color.surfaceCard)
+    }
+
+    private func promptRow(title: String, text: String, defaultText: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.textPrimary)
+            HStack(spacing: 5) {
+                Text(text == defaultText ? "默认" : "已自定义")
+                    .font(.system(size: 11))
+                    .foregroundStyle(text == defaultText ? Color.textTertiary : Color.brand)
+                Text("· \(text.count) 字")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.textTertiary)
+            }
+        }
+    }
+
     private var aboutSection: some View {
         Section {
             LabeledRow(label: "版本", value: "1.0.0")
@@ -483,5 +524,53 @@ struct ModelPickerSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - 注入提示词编辑器（System Prompt）
+
+struct SystemPromptEditorView: View {
+    /// true = 快速模式 / false = 深度模式
+    let isLite: Bool
+
+    @EnvironmentObject private var settings: AppSettings
+
+    private var promptBinding: Binding<String> {
+        isLite ? $settings.systemPromptLite : $settings.systemPromptDeep
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TextEditor(text: promptBinding)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.textPrimary)
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.appBackground)
+
+            // 底部状态条：字数 + 恢复默认
+            HStack {
+                Text("\(promptBinding.wrappedValue.count) 字")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Color.textTertiary)
+                Spacer()
+                Button {
+                    settings.resetSystemPrompt(lite: isLite)
+                } label: {
+                    Label("恢复默认", systemImage: "arrow.counterclockwise")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(Color.brand)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+        }
+        .navigationTitle(isLite ? "快速模式提示词" : "深度模式提示词")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
     }
 }

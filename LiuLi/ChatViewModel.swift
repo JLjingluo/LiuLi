@@ -44,16 +44,6 @@ final class ChatViewModel: ObservableObject {
         self.toolBox = AgentToolBox(root: docs)
     }
 
-    // MARK: 系统提示
-
-    private static let liteSystemPrompt = """
-    你是「璇玑」，一个简洁高效的手机助手。请用简体中文回答，直击要点，默认不使用 Markdown 标题与加粗，短问题给短答案。
-    """
-
-    private static let deepSystemPrompt = """
-    你是「璇玑」，一个专业的 AI 编程与文件助手。工作区内文件可通过工具访问。回答使用 Markdown；代码放入代码块并标注语言；涉及文件操作时优先使用工具完成而非只给建议。
-    """
-
     // MARK: 提示词优化
 
     private static let optimizerSystemPrompt = """
@@ -122,10 +112,12 @@ final class ChatViewModel: ObservableObject {
     }
 
     private var contextOptions: ContextBuildOptions {
-        ContextBuildOptions(
-            liteSystemPrompt: Self.liteSystemPrompt,
-            deepSystemPrompt: Self.deepSystemPrompt
-        )
+        // 用户编辑过的提示词为空时，回退到默认（保证行为可预期）
+        let lite = settings.systemPromptLite.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? AppSettings.defaultLiteSystemPrompt : settings.systemPromptLite
+        let deep = settings.systemPromptDeep.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? AppSettings.defaultDeepSystemPrompt : settings.systemPromptDeep
+        return ContextBuildOptions(liteSystemPrompt: lite, deepSystemPrompt: deep)
     }
 
     // MARK: 发送

@@ -211,7 +211,8 @@ final class AppSettings: ObservableObject {
         self.providerID = defaults.string(forKey: Keys.providerID) ?? "deepseek"
         self.customName = defaults.string(forKey: Keys.customName) ?? ""
         self.customBaseURL = defaults.string(forKey: Keys.customBaseURL) ?? ""
-        self.model = defaults.string(forKey: Keys.model) ?? ""
+        let modelID = defaults.string(forKey: Keys.model) ?? ""
+        self.model = modelID
         self.manualModels = defaults.string(forKey: Keys.manualModels) ?? ""
         self.includeUsage = defaults.object(forKey: Keys.includeUsage) as? Bool ?? true
         self.pricingCustomized = defaults.bool(forKey: Keys.pricingCustomized)
@@ -220,7 +221,7 @@ final class AppSettings: ObservableObject {
             self.inputPricePerM = inP
             self.outputPricePerM = outP
         } else {
-            let p = Self.suggestedPricing(forModel: self.model)
+            let p = Self.suggestedPricing(forModel: modelID)
             self.inputPricePerM = p.input
             self.outputPricePerM = p.output
         }

@@ -33,7 +33,7 @@ struct MarkdownTextView: View {
         case .quote(let text):
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(LinearGradient(colors: [Color.liuliTeal, Color.liuliIndigo],
+                    .fill(LinearGradient(colors: [Color.brand, Color.brand],
                                          startPoint: .top, endPoint: .bottom))
                     .frame(width: 3)
                 InlineFormattedText(text: text, size: 13, color: .textSecondary)
@@ -44,7 +44,7 @@ struct MarkdownTextView: View {
             HStack(alignment: .top, spacing: 7) {
                 Text(ordinal.map { "\($0)." } ?? "•")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.liuliAccent)
+                    .foregroundStyle(Color.brand)
                     .frame(minWidth: 16, alignment: .trailing)
                 InlineFormattedText(text: text, size: 14, color: .textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -91,7 +91,7 @@ struct InlineFormattedText: View {
             part.font = .system(size: size, weight: segment.bold ? .semibold : .regular,
                                design: segment.code ? .monospaced : .default)
             part.foregroundColor = segment.code
-                ? Color.liuliAccent
+                ? Color.brand
                 : (segment.bold ? color : color)
             if segment.code {
                 part.backgroundColor = Color.textPrimary.opacity(0.07)
@@ -198,7 +198,7 @@ struct CodeBlockView: View {
             HStack {
                 Text(language.isEmpty ? "code" : language)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Color.liuliTextTertiary)
+                    .foregroundStyle(Color.textTertiary)
                 Spacer()
 
                 if isHTML {
@@ -207,7 +207,7 @@ struct CodeBlockView: View {
                     } label: {
                         Label("预览", systemImage: "play.fill")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Color.liuliAccent)
+                            .foregroundStyle(Color.brand)
                     }
                     .buttonStyle(.plain)
                     .padding(.trailing, 6)
@@ -222,7 +222,7 @@ struct CodeBlockView: View {
                 } label: {
                     Label(copied ? "已复制" : "复制", systemImage: copied ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(copied ? Color.liuliTeal : Color.liuliTextSecondary)
+                        .foregroundStyle(copied ? Color.brand : Color.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -266,7 +266,7 @@ struct MarkdownTableView: View {
                         InlineFormattedText(
                             text: cell,
                             size: 12,
-                            color: rowIndex == 0 ? Color.liuliAccent : Color.textPrimary
+                            color: rowIndex == 0 ? Color.brand : Color.textPrimary
                         )
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 8)

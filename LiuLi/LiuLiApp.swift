@@ -25,9 +25,9 @@ struct LiuLiApp: App {
                 .environmentObject(settings)
                 .environmentObject(router)
                 .environmentObject(store)
-                // 跟随系统深浅色（液态玻璃两套材质均已适配）
-                .preferredColorScheme(nil)
-                .tint(Color.liuliAccent)
+                // 默认浅色系（对标 DeepSeek；深色主题仍完整适配）
+                .preferredColorScheme(.light)
+                .tint(Color.brand)
         }
     }
 }

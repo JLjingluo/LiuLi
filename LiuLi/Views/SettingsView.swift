@@ -73,13 +73,13 @@ struct SettingsView: View {
                         .foregroundStyle(Color.textPrimary)
                     Text(preset.baseURL)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Color.liuliTextTertiary)
+                        .foregroundStyle(Color.textTertiary)
                         .lineLimit(1)
                 }
                 Spacer()
                 if settings.providerID == preset.id {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.liuliAccent)
+                        .foregroundStyle(Color.brand)
                 }
             }
         }
@@ -99,13 +99,13 @@ struct SettingsView: View {
                         .foregroundStyle(Color.textPrimary)
                     Text(settings.customBaseURL.isEmpty ? "填写 Base URL" : settings.customBaseURL)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Color.liuliTextTertiary)
+                        .foregroundStyle(Color.textTertiary)
                         .lineLimit(1)
                 }
                 Spacer()
                 if settings.isCustom {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.liuliAccent)
+                        .foregroundStyle(Color.brand)
                 }
             }
         }
@@ -139,7 +139,7 @@ struct SettingsView: View {
                     autoFetchIfReady()
                 }
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.liuliAccent)
+                .foregroundStyle(Color.brand)
                 .disabled(settings.apiKey == apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines))
             }
         } header: {
@@ -170,15 +170,15 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(settings.model.isEmpty ? "点击选择模型" : settings.model)
                             .font(.system(size: 15, weight: .medium, design: .monospaced))
-                            .foregroundStyle(settings.model.isEmpty ? Color.liuliTextTertiary : .white)
+                            .foregroundStyle(settings.model.isEmpty ? Color.textTertiary : .white)
                         Text(modelSummary)
                             .font(.system(size: 11))
-                            .foregroundStyle(Color.liuliTextTertiary)
+                            .foregroundStyle(Color.textTertiary)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.liuliTextTertiary)
+                        .foregroundStyle(Color.textTertiary)
                 }
             }
             .buttonStyle(.plain)
@@ -192,7 +192,7 @@ struct SettingsView: View {
                     .onSubmit { commitManualModel() }
                 Button("添加") { commitManualModel() }
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.liuliAccent)
+                    .foregroundStyle(Color.brand)
             }
 
             if fetchingModels {
@@ -200,7 +200,7 @@ struct SettingsView: View {
                     ProgressView()
                     Text("正在识别可用模型…")
                         .font(.system(size: 13))
-                        .foregroundStyle(Color.liuliTextSecondary)
+                        .foregroundStyle(Color.textSecondary)
                 }
             }
 
@@ -216,7 +216,7 @@ struct SettingsView: View {
             } label: {
                 Label(fetchingModels ? "识别中…" : "重新识别模型列表", systemImage: "arrow.triangle.2.circlepath")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.liuliAccent)
+                    .foregroundStyle(Color.brand)
             }
             .disabled(fetchingModels || !settings.hasAPIKey)
 
@@ -225,10 +225,10 @@ struct SettingsView: View {
                 HStack(spacing: 6) {
                     Image(systemName: settings.modelSupportsVisionFlag ? "eye.fill" : "eye.slash")
                         .font(.system(size: 11))
-                        .foregroundStyle(settings.modelSupportsVisionFlag ? Color.liuliTeal : Color.liuliTextTertiary)
+                        .foregroundStyle(settings.modelSupportsVisionFlag ? Color.brand : Color.textTertiary)
                     Text(settings.modelSupportsVisionFlag ? "该模型支持图片识别（多模态）" : "该模型可能不支持图片识别，识图请选择多模态模型")
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.liuliTextTertiary)
+                        .foregroundStyle(Color.textTertiary)
                 }
             }
         } header: {
@@ -390,7 +390,7 @@ struct LabeledInput: View {
         HStack {
             Text(title)
                 .font(.system(size: 13))
-                .foregroundStyle(Color.liuliTextSecondary)
+                .foregroundStyle(Color.textSecondary)
                 .frame(width: 64, alignment: .leading)
             TextField(placeholder, text: $text)
                 .autocapitalization(.none)
@@ -409,11 +409,11 @@ struct LabeledRow: View {
         HStack {
             Text(label)
                 .font(.system(size: 14))
-                .foregroundStyle(Color.liuliTextSecondary)
+                .foregroundStyle(Color.textSecondary)
             Spacer()
             Text(value)
                 .font(.system(size: 13))
-                .foregroundStyle(Color.liuliTextTertiary)
+                .foregroundStyle(Color.textTertiary)
         }
     }
 }
@@ -437,7 +437,7 @@ struct ModelPickerSheet: View {
                 if filtered.isEmpty {
                     Text("暂无候选模型。请返回设置点击「重新识别模型列表」，或手动输入模型名。")
                         .font(.system(size: 13))
-                        .foregroundStyle(Color.liuliTextSecondary)
+                        .foregroundStyle(Color.textSecondary)
                 } else {
                     Section("识别到 \(filtered.count) 个模型") {
                         ForEach(filtered, id: \.self) { model in
@@ -453,13 +453,13 @@ struct ModelPickerSheet: View {
                                         if VisionCapability.likelySupportsVision(modelID: model) {
                                             Text("支持图片识别")
                                                 .font(.system(size: 10, weight: .medium))
-                                                .foregroundStyle(Color.liuliTeal)
+                                                .foregroundStyle(Color.brand)
                                         }
                                     }
                                     Spacer()
                                     if settings.model == model {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(Color.liuliAccent)
+                                            .foregroundStyle(Color.brand)
                                     }
                                 }
                             }
@@ -479,10 +479,9 @@ struct ModelPickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("完成") { dismiss() }
-                        .foregroundStyle(Color.liuliAccent)
+                        .foregroundStyle(Color.brand)
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }

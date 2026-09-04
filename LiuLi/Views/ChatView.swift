@@ -1,10 +1,10 @@
 import SwiftUI
 import PhotosUI
 
-// MARK: - 聊天主界面（对标豆包布局）
-// 顶部：标题居中 + 侧栏/模式切换
-// 中部：消息流（用户右气泡 / AI 左排版）
-// 底部：液态玻璃输入栏（+ 附件 / 文本框 / 圆形发送键）
+// MARK: - 聊天主界面（对标 DeepSeek：极简浅色）
+// 顶部：侧栏入口 + 标题 + 模式胶囊
+// 中部：消息流（用户右浅灰蓝气泡 / AI 左无气泡排版）
+// 底部：液态玻璃输入栏（+ 附件 / 玻璃文本框 / 品牌蓝发送键）
 
 struct ChatView: View {
     @EnvironmentObject private var store: ConversationStore
@@ -12,7 +12,7 @@ struct ChatView: View {
     @EnvironmentObject private var router: AppRouter
     @StateObject private var vm = ChatViewModel(store: .shared, settings: .shared)
 
-    // 输入框本地状态：发送后立即清空（豆包行为）
+    // 输入框本地状态：发送后立即清空
     @State private var inputText = ""
     @State private var showConversationList = false
     @State private var photoSelection: [PhotosPickerItem] = []
@@ -22,19 +22,11 @@ struct ChatView: View {
     @State private var optimizeError: String?
     @FocusState private var inputFocused: Bool
 
-    /// 建议提问（豆包式空状态卡片，按当前模式给出）
-    private var suggestions: [SuggestionItem] {
+    /// 建议提问（DeepSeek 式简单文字胶囊，按模式给出）
+    private var suggestions: [String] {
         store.current?.mode == .deep
-        ? [
-            SuggestionItem(icon: "globe", title: "写一个个人主页", subtitle: "生成 index.html 并预览"),
-            SuggestionItem(icon: "doc.text", title: "读一下工作区文件", subtitle: "让 AI 列出并解读文件"),
-            SuggestionItem(icon: "hammer", title: "写一个计算器", subtitle: "HTML+CSS+JS 小程序"),
-        ]
-        : [
-            SuggestionItem(icon: "lightbulb", title: "今天适合做什么？", subtitle: "随手一问，快速回答"),
-            SuggestionItem(icon: "translate", title: "帮我润色一句话", subtitle: "快速改写文本"),
-            SuggestionItem(icon: "list.bullet", title: "列个周末计划", subtitle: "简洁要点式输出"),
-        ]
+        ? ["写一个个人主页", "读一下工作区文件", "写一个计算器"]
+        : ["今天适合做什么", "帮我润色一句话", "列个周末计划"]
     }
 
     var body: some View {
@@ -44,7 +36,14 @@ struct ChatView: View {
                     notConfiguredBanner
                 }
                 messageList
+            }
+            // 悬浮液态玻璃输入胶囊：消息流从玻璃下方滚过，产生真实折射
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 inputBar
+                    .padding(.horizontal, 10)
+                    .padding(.top, 8)
+                    .padding(.bottom, 8)
+                    .liquidGlass(cornerRadius: 26)
             }
             .navigationTitle(store.current?.title ?? "对话")
             .navigationBarTitleDisplayMode(.inline)
@@ -71,7 +70,7 @@ struct ChatView: View {
             router.selectedTab = .settings
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
+                Image(systemName: "exclamationmark.triangle")
                 Text("尚未完成 API 配置，点此前往设置")
                     .font(.system(size: 13, weight: .medium))
             }
@@ -88,7 +87,7 @@ struct ChatView: View {
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 18) {
+                LazyVStack(spacing: 20) {
                     if let messages = store.current?.messages, !messages.isEmpty {
                         ForEach(messages) { message in
                             MessageBubble(
@@ -127,6 +126,7 @@ struct ChatView: View {
                 }
             }
             .defaultScrollAnchor(.bottom)
+            .scrollDismissesKeyboard(.immediately)
         }
     }
 
@@ -134,7 +134,6 @@ struct ChatView: View {
     private func isLatestAssistant(_ message: ChatMessage) -> Bool {
         guard let msgs = store.current?.messages else { return false }
         guard message.role == .assistant else { return false }
-        // 找最后一条非 tool 消息；若是这条 assistant 则为最新
         for m in msgs.reversed() {
             if m.role == .tool { continue }
             return m.id == message.id && m.role == .assistant
@@ -142,73 +141,56 @@ struct ChatView: View {
         return false
     }
 
-    // MARK: 空状态（豆包式建议卡片）
+    // MARK: 空状态（DeepSeek 式：logo + 一句问候 + 简单建议胶囊）
 
     private var emptyState: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(Color.brandGradient)
-                        .frame(width: 64, height: 64)
-                        .shadow(color: Color.liuliIndigo.opacity(0.35), radius: 18, y: 8)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 26, weight: .medium))
-                        .foregroundStyle(Color.onBrand)
-                }
-                Text(AppInfo.displayName)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(Color.textPrimary)
-                Text(modeHintText)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.textTertiary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 34)
-            }
-            .padding(.top, 48)
+        VStack(spacing: 0) {
+            Spacer(minLength: 54)
 
-            VStack(spacing: 10) {
-                ForEach(suggestions) { s in
-                    Button {
-                        inputText = s.title
-                        inputFocused = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: s.icon)
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(Color.liuliAccent)
-                                .frame(width: 30, height: 30)
-                                .background(Circle().fill(Color.liuliAccent.opacity(0.12)))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(s.title)
-                                    .font(.system(size: 14.5, weight: .medium))
-                                    .foregroundStyle(Color.textPrimary)
-                                Text(s.subtitle)
-                                    .font(.system(size: 11.5))
-                                    .foregroundStyle(Color.textTertiary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Color.textTertiary.opacity(0.6))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.surfaceCard)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .strokeBorder(Color.glassStroke, lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
+            // logo：品牌蓝圆角方 + 白 N
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.brand)
+                Text("N")
+                    .font(.system(size: 25, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white)
             }
-            .padding(.horizontal, 6)
+            .frame(width: 52, height: 52)
+
+            Text("你好，我是 \(AppInfo.displayName)")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
+                .padding(.top, 16)
+
+            Text(modeHintText)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.textTertiary)
+                .padding(.top, 6)
+
+            // 建议胶囊（浅灰底描边，点击填入输入框）
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(suggestions, id: \.self) { s in
+                        Button {
+                            inputText = s
+                            inputFocused = true
+                        } label: {
+                            Text(s)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(Color.textSecondary)
+                                .padding(.horizontal, 13)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(Color.surfaceCard))
+                                .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 28)
+            }
+
+            Spacer(minLength: 0)
         }
-        .padding(.bottom, 16)
     }
 
     private var modeHintText: String {
@@ -229,27 +211,36 @@ struct ChatView: View {
                 showConversationList = true
             } label: {
                 Image(systemName: "sidebar.left")
-                    .foregroundStyle(Color.liuliAccent)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(Color.textSecondary)
             }
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            // 模式切换（快速/深度，对标 DeepSeek）
+            // 模式切换（快速/深度，DeepSeek 式胶囊）
             Button {
                 if var conv = store.current, !vm.isStreaming {
                     conv.mode = conv.mode == .lite ? .deep : .lite
                     store.update(conv)
                 }
             } label: {
-                GlassBadge(
-                    text: (store.current?.mode ?? .lite).displayName,
-                    tint: store.current?.mode == .deep ? Color.liuliViolet : Color.liuliTeal
-                )
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(Color.brand)
+                        .frame(width: 5, height: 5)
+                    Text((store.current?.mode ?? .lite).displayName)
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(Color.brand)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(Color.brand.opacity(0.10)))
             }
+            .disabled(vm.isStreaming)
         }
     }
 
-    // MARK: 输入栏（豆包式：+ 附件 | 文本框 | 发送键）
+    // MARK: 输入栏（液态玻璃：+ 附件 | 玻璃文本框 | 品牌蓝发送键）
 
     private var inputBar: some View {
         VStack(spacing: 6) {
@@ -269,20 +260,20 @@ struct ChatView: View {
                                     Image(uiImage: ui)
                                         .resizable()
                                         .scaledToFill()
-                                        .frame(width: 60, height: 60)
+                                        .frame(width: 58, height: 58)
                                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 } else {
                                     RoundedRectangle(cornerRadius: 12)
                                         .fill(Color.surfaceCard)
-                                        .frame(width: 60, height: 60)
+                                        .frame(width: 58, height: 58)
                                 }
                                 Button {
                                     vm.pendingImages.removeAll { $0.id == img.id }
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundStyle(.white)
-                                        .shadow(radius: 3)
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Color.textTertiary)
+                                        .shadow(color: .white, radius: 2)
                                 }
                                 .offset(x: 5, y: -5)
                             }
@@ -290,42 +281,37 @@ struct ChatView: View {
                     }
                     .padding(.horizontal, 4)
                 }
-                .frame(height: 70)
+                .frame(height: 68)
             }
 
-            HStack(alignment: .bottom, spacing: 10) {
-                // 「+」附件菜单（豆包式）
+            HStack(alignment: .bottom, spacing: 8) {
+                // 「+」附件（玻璃上的简单灰圆）
                 Menu {
                     PhotosPicker(selection: $photoSelection, maxSelectionCount: 3, matching: .images) {
-                        Label("相册选图（识图）", systemImage: "photo.on.rectangle.angled")
+                        Label("相册选图（识图）", systemImage: "photo")
                     }
                     .disabled(vm.isStreaming)
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(Color.liuliAccent)
-                        .symbolRenderingMode(.hierarchical)
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.textSecondary)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color.surfaceCard))
+                        .overlay(Circle().strokeBorder(Color.glassStroke, lineWidth: 1))
                 }
                 .disabled(vm.isStreaming)
 
-                // 输入框（右下角：提示词优化魔法棒）
+                // 输入框（玻璃胶囊内的实底白框 + 右下魔法棒）
                 ZStack(alignment: .bottomTrailing) {
                     TextField(vm.isStreaming ? "生成中…" : "有问题，尽管问", text: $inputText, axis: .vertical)
                         .textFieldStyle(.plain)
                         .lineLimit(1...5)
                         .focused($inputFocused)
                         .font(.system(size: 15.5))
+                        .foregroundStyle(Color.textPrimary)
                         .padding(.leading, 14)
-                        .padding(.trailing, showOptimizeButton ? 42 : 14)
-                        .padding(.vertical, 11)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .strokeBorder(Color.glassStroke, lineWidth: 1)
-                        )
+                        .padding(.trailing, showOptimizeButton ? 40 : 14)
+                        .padding(.vertical, 12)
                         .submitLabel(.send)
                         .onSubmit { performSend() }
 
@@ -333,23 +319,26 @@ struct ChatView: View {
                         optimizeButton
                     }
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.surfaceCard)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(Color.glassStroke, lineWidth: 1)
+                )
 
                 // 发送 / 停止
                 sendButton
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 10)
             .padding(.top, 2)
 
             Text("内容由 AI 生成，请注意甄别")
                 .font(.system(size: 10))
                 .foregroundStyle(Color.textTertiary.opacity(0.7))
                 .padding(.bottom, 2)
-        }
-        .padding(.top, 6)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Color.separator).frame(height: 0.5)
+                .padding(.top, 6)
         }
         .onChange(of: photoSelection) { _, items in
             loadPickedImages(items)
@@ -387,18 +376,16 @@ struct ChatView: View {
                         .controlSize(.small)
                 } else {
                     Image(systemName: "wand.and.stars")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.liuliAccent)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.brand)
                 }
             }
-            .frame(width: 26, height: 26)
-            .background(Circle().fill(.ultraThinMaterial))
-            .overlay(Circle().strokeBorder(Color.glassStroke, lineWidth: 1))
+            .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
         .disabled(vm.isOptimizing)
-        .padding(.trailing, 7)
-        .padding(.bottom, 7)
+        .padding(.trailing, 6)
+        .padding(.bottom, 6)
     }
 
     private var optimizeStatusBar: some View {
@@ -408,7 +395,7 @@ struct ChatView: View {
                     .controlSize(.small)
                 Text("正在优化提示词…")
             } else if let err = optimizeError {
-                Image(systemName: "exclamationmark.triangle.fill")
+                Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.errorText)
                 Text(err)
@@ -416,7 +403,7 @@ struct ChatView: View {
             } else {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.liuliAccent)
+                    .foregroundStyle(Color.brand)
                 Text("已优化提示词")
             }
             Spacer(minLength: 4)
@@ -426,8 +413,8 @@ struct ChatView: View {
                         vm.undoOptimize()
                         inputText = vm.draft
                     }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.liuliAccent)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.brand)
                 }
                 Button {
                     optimizeError = nil
@@ -441,11 +428,7 @@ struct ChatView: View {
         }
         .font(.system(size: 12))
         .foregroundStyle(Color.textSecondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(Capsule().fill(.ultraThinMaterial))
-        .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
     }
 
     private func performOptimize() {
@@ -466,27 +449,30 @@ struct ChatView: View {
     @ViewBuilder
     private var sendButton: some View {
         if vm.isStreaming {
+            // 停止（DeepSeek 式：白圆黑方块）
             Button {
                 vm.stop()
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Color.errorText)
-                        .frame(width: 34, height: 34)
+                        .fill(Color.white)
+                        .frame(width: 36, height: 36)
+                        .overlay(Circle().strokeBorder(Color.glassStroke, lineWidth: 1))
                     Image(systemName: "stop.fill")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Color.white)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.textPrimary)
                 }
             }
             .buttonStyle(.plain)
         } else {
+            // 发送（品牌蓝实心圆）
             Button(action: performSend) {
                 ZStack {
                     Circle()
-                        .fill(canSendInput ? AnyShapeStyle(Color.brandGradient) : AnyShapeStyle(Color.textTertiary.opacity(0.25)))
-                        .frame(width: 34, height: 34)
+                        .fill(canSendInput ? Color.brand : Color.textTertiary.opacity(0.22))
+                        .frame(width: 36, height: 36)
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color.white)
                 }
             }
@@ -501,7 +487,7 @@ struct ChatView: View {
         (!inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !vm.pendingImages.isEmpty)
     }
 
-    /// 发送：同步本地输入到 VM → 发送 → 立即清空输入框（豆包行为）
+    /// 发送：同步本地输入到 VM → 发送 → 立即清空输入框
     private func performSend() {
         guard !vm.isStreaming else { return }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -510,7 +496,6 @@ struct ChatView: View {
 
         vm.draft = inputText
         vm.send()
-        // 立即清空（用户消息已同步上屏）
         inputText = ""
     }
 
@@ -538,13 +523,4 @@ struct ChatView: View {
             }
         }
     }
-}
-
-// MARK: - 建议项模型
-
-struct SuggestionItem: Identifiable {
-    let id = UUID()
-    let icon: String
-    let title: String
-    let subtitle: String
 }

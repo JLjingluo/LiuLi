@@ -1,8 +1,8 @@
 import SwiftUI
 
-// MARK: - 消息视图（对标豆包布局）
-// - 用户：右侧品牌渐变气泡
-// - AI：左侧头像 + 无气泡直接排版 + 底部操作栏（复制/重新生成/选择文本）
+// MARK: - 消息视图（对标 DeepSeek 布局）
+// - 用户：右侧浅灰蓝气泡（深色文字，非彩色）
+// - AI：左侧小 logo 头像 + 无气泡直接排版 + 底部小灰图标操作栏
 // - 长按消息 → contextMenu（复制 / 选择文本 / 重新生成）
 
 struct MessageBubble: View {
@@ -68,7 +68,7 @@ struct MessageBubble: View {
         message.text
     }
 
-    // MARK: 用户气泡（右对齐，豆包式品牌渐变）
+    // MARK: 用户气泡（右对齐，浅灰蓝 + 深色文字，DeepSeek 式）
 
     private var userBubble: some View {
         VStack(alignment: .trailing, spacing: 6) {
@@ -78,13 +78,19 @@ struct MessageBubble: View {
             if !message.text.isEmpty {
                 Text(message.text)
                     .font(.system(size: 15.5))
-                    .foregroundStyle(Color.onBrand)
+                    .foregroundStyle(Color.onUserBubble)
                     .textSelection(.enabled)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(
-                        RoundedRectangle(cornerRadius: 19, style: .continuous)
-                            .fill(Color.brandGradient)
+                        // iOS 聊天惯例：右下角小圆角作“尾巴”，其余大圆角
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(
+                                topLeading: 18, bottomLeading: 18,
+                                topTrailing: 18, bottomTrailing: 6),
+                            style: .continuous
+                        )
+                        .fill(Color.userBubble)
                     )
                     .frame(maxWidth: 286, alignment: .trailing)
             }
@@ -113,16 +119,16 @@ struct MessageBubble: View {
         }
     }
 
-    // MARK: AI 消息（豆包式：左侧头像 + 无气泡排版 + 操作栏）
+    // MARK: AI 消息（DeepSeek 式：小头像 + 无气泡排版 + 小灰图标操作栏）
 
     private var assistantBubble: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             // 头像 + 名称
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 aiAvatar
                 Text(AppInfo.displayName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.textSecondary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.textTertiary)
                 if isStreaming {
                     ThinkingIndicator()
                 }
@@ -148,7 +154,7 @@ struct MessageBubble: View {
 
             // 工具调用展示
             if !message.toolCalls.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
                     ForEach(message.toolCalls) { call in
                         ToolCallRow(call: call)
                     }
@@ -157,7 +163,7 @@ struct MessageBubble: View {
 
             // 错误信息
             if let error = message.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
+                Label(error, systemImage: "exclamationmark.triangle")
                     .font(.system(size: 12.5))
                     .foregroundStyle(Color.errorText)
             }
@@ -168,16 +174,12 @@ struct MessageBubble: View {
                     inputPerM: settings.inputPricePerM,
                     outputPerM: settings.outputPricePerM
                 )
-                HStack(spacing: 3) {
-                    Image(systemName: "yensign.circle")
-                        .font(.system(size: 9))
-                    Text("本次 \(UsageInfo.costText(cost))")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .foregroundStyle(Color.textTertiary)
+                Text("本次 \(UsageInfo.costText(cost))")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.textTertiary.opacity(0.8))
             }
 
-            // 操作栏（豆包式：复制 / 重新生成，流式完成后显示）
+            // 操作栏（DeepSeek 式：小灰图标，流式完成后显示）
             if !isStreaming && (isLatestAssistant || message.errorMessage != nil) {
                 assistantActionBar
             }
@@ -190,30 +192,47 @@ struct MessageBubble: View {
 
     private var aiAvatar: some View {
         ZStack {
-            Circle()
-                .fill(Color.brandGradient)
-            Image(systemName: "sparkle")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.onBrand)
+            Circle().fill(Color.brand)
+            Text("N")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.white)
         }
-        .frame(width: 26, height: 26)
+        .frame(width: 24, height: 24)
     }
 
     private var assistantActionBar: some View {
-        HStack(spacing: 2) {
-            ActionIconButton(systemImage: "doc.on.doc", label: "复制") {
+        HStack(spacing: 18) {
+            Button {
                 UIPasteboard.general.string = message.text
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.textTertiary)
             }
+            .buttonStyle(.plain)
+
             if !message.text.isEmpty {
-                ActionIconButton(systemImage: "character.cursor.ibeam", label: "选字") {
+                Button {
                     showTextSelector = true
+                } label: {
+                    Image(systemName: "character.cursor.ibeam")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.textTertiary)
                 }
+                .buttonStyle(.plain)
             }
+
             if isLatestAssistant, let onRegenerate {
-                ActionIconButton(systemImage: "arrow.clockwise", label: "重答") {
+                Button {
                     onRegenerate()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.textTertiary)
                 }
+                .buttonStyle(.plain)
             }
+
             Spacer()
         }
         .padding(.top, 2)
@@ -223,14 +242,9 @@ struct MessageBubble: View {
 
     private var toolRow: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Image(systemName: "wrench.and.screwdriver")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.liuliViolet)
-                Text("工具结果 · \(message.toolName ?? "unknown")")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.textTertiary)
-            }
+            Text("工具 · \(message.toolName ?? "unknown")")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(Color.textTertiary)
             Text(message.text)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(Color.textSecondary)
@@ -242,10 +256,6 @@ struct MessageBubble: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.toolChipBG)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.liuliViolet.opacity(0.25), lineWidth: 0.8)
         )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -262,37 +272,7 @@ struct MessageBubble: View {
     }
 }
 
-// MARK: - 操作栏小按钮（豆包式轻量操作）
-
-struct ActionIconButton: View {
-    let systemImage: String
-    let label: String
-    let action: () -> Void
-    @State private var pressed = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 3) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .medium))
-                Text(label)
-                    .font(.system(size: 11.5, weight: .medium))
-            }
-            .foregroundStyle(Color.textTertiary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                Capsule().fill(pressed ? Color.textPrimary.opacity(0.10) : Color.surfaceCard)
-            )
-        }
-        .buttonStyle(.plain)
-        .onLongPressGesture(minimumDuration: .infinity) {} onPressingChanged: { v in
-            withAnimation(.easeInOut(duration: 0.12)) { pressed = v }
-        }
-    }
-}
-
-// MARK: - 思考中指示器（豆包式渐变呼吸点）
+// MARK: - 思考中指示器（小灰点呼吸）
 
 struct ThinkingIndicator: View {
     @State private var animating = false
@@ -300,7 +280,7 @@ struct ThinkingIndicator: View {
     var body: some View {
         HStack(spacing: 3) {
             Circle()
-                .fill(Color.liuliAccent)
+                .fill(Color.brand)
                 .frame(width: 4, height: 4)
                 .scaleEffect(animating ? 1.0 : 0.55)
                 .opacity(animating ? 1.0 : 0.5)
@@ -324,7 +304,7 @@ struct TypingDot: View {
 
     var body: some View {
         Circle()
-            .fill(Color.liuliAccent)
+            .fill(Color.brand.opacity(0.7))
             .frame(width: 6, height: 6)
             .offset(y: animating ? -3 : 2)
             .animation(
@@ -335,7 +315,7 @@ struct TypingDot: View {
     }
 }
 
-// MARK: - 思考链折叠
+// MARK: - 思考链折叠（DeepSeek 式：简单文字按钮）
 
 struct ReasoningDisclosure: View {
     let text: String
@@ -346,13 +326,11 @@ struct ReasoningDisclosure: View {
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
             } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 10, weight: .semibold))
-                    Text(expanded ? "收起思考过程" : "思考过程")
-                        .font(.system(size: 11, weight: .medium))
+                HStack(spacing: 4) {
+                    Text(expanded ? "收起思考" : "思考过程")
+                        .font(.system(size: 11.5, weight: .medium))
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: 9, weight: .semibold))
                 }
                 .foregroundStyle(Color.textTertiary)
             }
@@ -363,18 +341,18 @@ struct ReasoningDisclosure: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color.textSecondary)
                     .textSelection(.enabled)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.surfaceCard)
-                    )
+                    .padding(.leading, 8)
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(Color.separator)
+                            .frame(width: 2)
+                    }
             }
         }
     }
 }
 
-// MARK: - 工具调用行
+// MARK: - 工具调用行（品牌蓝淡底胶囊）
 
 struct ToolCallRow: View {
     let call: ToolCallInfo
@@ -407,30 +385,25 @@ struct ToolCallRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.liuliTeal)
+                .font(.system(size: 10))
+                .foregroundStyle(Color.brand)
             Text(displayName)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.textSecondary)
             if let path = pathArgument {
                 Text(path)
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(Color.liuliAccent.opacity(0.9))
+                    .foregroundStyle(Color.textTertiary)
                     .lineLimit(1)
             }
             Spacer()
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.toolChipBG)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.liuliTeal.opacity(0.22), lineWidth: 0.8)
+            Capsule().fill(Color.toolChipBG)
         )
     }
 }

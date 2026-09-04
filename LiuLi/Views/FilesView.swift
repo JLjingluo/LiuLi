@@ -36,7 +36,7 @@ struct DirectoryListView: View {
             if entries.isEmpty {
                 Text("此目录为空。\n\n深度模式下让 AI 帮你写文件，或点右上 + 新建。")
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.liuliTextSecondary)
+                    .foregroundStyle(Color.textSecondary)
             } else {
                 ForEach(entries) { entry in
                     NavigationLink(value: entry) {
@@ -54,13 +54,13 @@ struct DirectoryListView: View {
                         } label: {
                             Label("重命名", systemImage: "pencil")
                         }
-                        .tint(Color.liuliIndigo)
+                        .tint(Color.brand)
                         Button {
                             router.askAI(aboutFile: relativePath(of: entry))
                         } label: {
                             Label("问 AI", systemImage: "wand.and.stars")
                         }
-                        .tint(Color.liuliViolet)
+                        .tint(Color.brand)
                     }
                 }
             }
@@ -86,7 +86,7 @@ struct DirectoryListView: View {
                     }
                 } label: {
                     Image(systemName: "plus")
-                        .foregroundStyle(Color.liuliAccent)
+                        .foregroundStyle(Color.brand)
                 }
             }
         }
@@ -170,9 +170,9 @@ struct DirectoryListView: View {
 
     private func rowContent(_ entry: FileEntry) -> some View {
         HStack(spacing: 11) {
-            Image(systemName: entry.isDirectory ? "folder.fill" : iconName(for: entry.name))
+            Image(systemName: entry.isDirectory ? "folder" : iconName(for: entry.name))
                 .font(.system(size: 16))
-                .foregroundStyle(entry.isDirectory ? Color.liuliIndigo : Color.liuliTeal)
+                .foregroundStyle(Color.brand)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -183,14 +183,14 @@ struct DirectoryListView: View {
                 if !entry.isDirectory {
                     Text(ByteCountFormatter.string(fromByteCount: Int64(entry.size), countStyle: .file))
                         .font(.system(size: 10))
-                        .foregroundStyle(Color.liuliTextTertiary)
+                        .foregroundStyle(Color.textTertiary)
                 }
             }
             Spacer()
 
             if isHTMLFile(entry.name) && !entry.isDirectory {
                 NavigationLink(value: entry) {
-                    GlassBadge(text: "编辑", tint: .liuliAccent)
+                    GlassBadge(text: "编辑", tint: .brand)
                 }
                 .buttonStyle(.plain)
             }
@@ -306,7 +306,7 @@ struct EditorView: View {
                         save()
                     } label: {
                         Image(systemName: savedFlash ? "checkmark.circle.fill" : "square.and.arrow.down")
-                            .foregroundStyle(savedFlash ? Color.liuliTeal : Color.liuliAccent)
+                            .foregroundStyle(Color.brand)
                     }
                 }
                 if isHTML {
@@ -316,7 +316,7 @@ struct EditorView: View {
                             showPreview = true
                         } label: {
                             Image(systemName: "play.circle.fill")
-                                .foregroundStyle(Color.liuliTeal)
+                                .foregroundStyle(Color.brand)
                         }
                     }
                 }
@@ -326,14 +326,14 @@ struct EditorView: View {
                     HStack {
                         Text("\(lineCount) 行 · \(content.utf8.count) 字节")
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(Color.liuliTextTertiary)
+                            .foregroundStyle(Color.textTertiary)
                         Spacer()
                         Button {
                             router.askAI(aboutFile: relativePath())
                         } label: {
                             Label("让 AI 编辑", systemImage: "wand.and.stars")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Color.liuliViolet)
+                                .foregroundStyle(Color.brand)
                         }
                     }
                 }

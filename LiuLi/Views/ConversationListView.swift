@@ -1,13 +1,11 @@
 import SwiftUI
 
-// MARK: - 会话列表（抽屉）
+// MARK: - 会话列表（抽屉，DeepSeek 式极简）
 
 struct ConversationListView: View {
     @EnvironmentObject private var store: ConversationStore
     @EnvironmentObject private var router: AppRouter
     @Environment(\.dismiss) private var dismiss
-
-    @State private var newChatMode: ChatMode = .lite
 
     var body: some View {
         NavigationStack {
@@ -17,15 +15,15 @@ struct ConversationListView: View {
                         store.create(mode: .lite)
                         dismiss()
                     } label: {
-                        Label("新建对话 · 快速模式", systemImage: "bolt.fill")
-                            .foregroundStyle(Color.liuliTeal)
+                        Label("新对话 · 快速模式", systemImage: "plus")
+                            .foregroundStyle(Color.brand)
                     }
                     Button {
                         store.create(mode: .deep)
                         dismiss()
                     } label: {
-                        Label("新建对话 · 深度模式", systemImage: "brain.filled.head.profile")
-                            .foregroundStyle(Color.liuliViolet)
+                        Label("新对话 · 深度模式", systemImage: "plus")
+                            .foregroundStyle(Color.brand)
                     }
                 }
                 .listRowBackground(Color.surfaceCard)
@@ -46,39 +44,33 @@ struct ConversationListView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("完成") { dismiss() }
-                        .foregroundStyle(Color.liuliAccent)
+                        .foregroundStyle(Color.brand)
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
+    /// 纯文字行（DeepSeek 式：无图标，标题 + 消息数/时间）
     private func row(_ conv: Conversation) -> some View {
         Button {
             store.select(conv.id)
             dismiss()
         } label: {
-            HStack(spacing: 10) {
-                Image(systemName: conv.mode == .deep ? "brain.filled.head.profile" : "bolt.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(conv.mode == .deep ? Color.liuliViolet : Color.liuliTeal)
-                    .frame(width: 22)
-
-                VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    if conv.id == store.currentID {
+                        Circle()
+                            .fill(Color.brand)
+                            .frame(width: 5, height: 5)
+                    }
                     Text(conv.title)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 14.5))
                         .foregroundStyle(Color.textPrimary)
                         .lineLimit(1)
-                    Text("\(conv.messages.count) 条消息 · \(conv.updatedAt.formatted(.relative(presentation: .named)))")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.liuliTextTertiary)
                 }
-
-                Spacer()
-
-                if conv.id == store.currentID {
-                    GlassBadge(text: "当前", tint: .liuliAccent)
-                }
+                Text("\(conv.messages.count) 条消息 · \(conv.updatedAt.formatted(.relative(presentation: .named)))")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.textTertiary)
             }
         }
         .buttonStyle(.plain)

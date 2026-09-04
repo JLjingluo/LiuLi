@@ -79,14 +79,14 @@ struct HTMLPreviewSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("关闭") { dismiss() }
-                        .foregroundStyle(Color.liuliAccent)
+                        .foregroundStyle(Color.brand)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         reloadToken = UUID()
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .foregroundStyle(Color.liuliAccent)
+                            .foregroundStyle(Color.brand)
                     }
                 }
             }

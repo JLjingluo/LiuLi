@@ -30,7 +30,7 @@ struct TextSelectorView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("完成") { dismiss() }
-                        .foregroundStyle(Color.liuliAccent)
+                        .foregroundStyle(Color.brand)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -41,7 +41,7 @@ struct TextSelectorView: View {
                         }
                     } label: {
                         Label(copied ? "已复制" : "复制全部", systemImage: copied ? "checkmark" : "doc.on.doc")
-                            .foregroundStyle(Color.liuliAccent)
+                            .foregroundStyle(Color.brand)
                     }
                 }
             }

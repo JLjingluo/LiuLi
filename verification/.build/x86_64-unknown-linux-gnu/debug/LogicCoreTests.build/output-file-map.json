@@ -1,0 +1,40 @@
+{
+  "": {
+    "swift-dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/master.swiftdeps"
+  },
+  "/workspace/LiuLi/verification/Tests/LogicCoreTests/AgentToolsTests.swift": {
+    "dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/AgentToolsTests.d",
+    "object": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/AgentToolsTests.swift.o",
+    "swiftmodule": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/AgentToolsTests~partial.swiftmodule",
+    "swift-dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/AgentToolsTests.swiftdeps",
+    "diagnostics": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/AgentToolsTests.dia"
+  },
+  "/workspace/LiuLi/verification/Tests/LogicCoreTests/ContextBuilderTests.swift": {
+    "dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/ContextBuilderTests.d",
+    "object": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/ContextBuilderTests.swift.o",
+    "swiftmodule": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/ContextBuilderTests~partial.swiftmodule",
+    "swift-dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/ContextBuilderTests.swiftdeps",
+    "diagnostics": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/ContextBuilderTests.dia"
+  },
+  "/workspace/LiuLi/verification/Tests/LogicCoreTests/MarkdownParserTests.swift": {
+    "dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/MarkdownParserTests.d",
+    "object": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/MarkdownParserTests.swift.o",
+    "swiftmodule": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/MarkdownParserTests~partial.swiftmodule",
+    "swift-dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/MarkdownParserTests.swiftdeps",
+    "diagnostics": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/MarkdownParserTests.dia"
+  },
+  "/workspace/LiuLi/verification/Tests/LogicCoreTests/SSEParserTests.swift": {
+    "dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/SSEParserTests.d",
+    "object": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/SSEParserTests.swift.o",
+    "swiftmodule": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/SSEParserTests~partial.swiftmodule",
+    "swift-dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/SSEParserTests.swiftdeps",
+    "diagnostics": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/SSEParserTests.dia"
+  },
+  "/workspace/LiuLi/verification/Tests/LogicCoreTests/VisionAndPathTests.swift": {
+    "dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/VisionAndPathTests.d",
+    "object": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/VisionAndPathTests.swift.o",
+    "swiftmodule": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/VisionAndPathTests~partial.swiftmodule",
+    "swift-dependencies": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/VisionAndPathTests.swiftdeps",
+    "diagnostics": "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCoreTests.build/VisionAndPathTests.dia"
+  }
+}

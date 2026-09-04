@@ -1,0 +1,3 @@
+module LogicCore {
+    header "/workspace/LiuLi/verification/.build/x86_64-unknown-linux-gnu/debug/LogicCore.build/include/LogicCore-Swift.h"
+}

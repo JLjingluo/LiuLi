@@ -134,6 +134,7 @@ struct LiquidGlassStyle: ViewModifier {
     }
 
     #if compiler(>=6.2) && canImport(UIKit)
+    @available(iOS 26.0, *)
     @ViewBuilder
     private func modified26(_ content: some View) -> some View {
         if interactive {

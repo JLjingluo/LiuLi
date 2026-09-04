@@ -94,7 +94,7 @@ struct MessageBubble: View {
         }
     }
 
-    private var imageGrid: View {
+    private var imageGrid: some View {
         VStack(alignment: .trailing, spacing: 6) {
             ForEach(Array(message.images.enumerated()), id: \.offset) { _, dataURL in
                 if let ui = ImageCompressor.imageFromDataURL(dataURL) {

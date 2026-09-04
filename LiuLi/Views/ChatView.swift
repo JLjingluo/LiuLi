@@ -21,6 +21,8 @@ struct ChatView: View {
     @State private var forceVisionBypass = false
     @State private var optimizeError: String?
     @State private var lastScrollAt = Date.distantPast
+    /// 用户是否停在消息底部（仅贴底时才自动跟随滚动，翻阅历史不被打断）
+    @State private var pinnedToBottom = true
     @FocusState private var inputFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
 
@@ -37,7 +39,13 @@ struct ChatView: View {
                 if !settings.isConfigured {
                     notConfiguredBanner
                 }
-                messageList
+                if store.current?.messages.isEmpty != false {
+                    // 空状态独立于滚动区：图标在可视区域正中央
+                    emptyState
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    messageList
+                }
             }
             // 悬浮液态玻璃输入胶囊：贴住 Tab 栏形成一体（消息从玻璃下方滚过折射）
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -101,44 +109,64 @@ struct ChatView: View {
 
     // MARK: 消息列表
 
+    /// 底部哨兵 PreferenceKey：判断是否贴底（翻阅历史时不再自动跳底）
+    private struct ChatAtBottomKey: PreferenceKey {
+        static var defaultValue: Bool = true
+        static func reduce(value: inout Bool, nextValue: () -> Bool) { value = nextValue() }
+    }
+
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 20) {
-                    if let messages = store.current?.messages, !messages.isEmpty {
-                        ForEach(messages) { message in
-                            MessageBubble(
-                                message: message,
-                                isStreaming: vm.isStreaming && message.id == store.current?.messages.last?.id,
-                                isLatestAssistant: isLatestAssistant(message),
-                                onRegenerate: { vm.regenerate() }
-                            )
-                            .id(message.id)
-                        }
-                    } else {
-                        emptyState
+                    ForEach(store.current?.messages ?? []) { message in
+                        MessageBubble(
+                            message: message,
+                            isStreaming: vm.isStreaming && message.id == store.current?.messages.last?.id,
+                            isLatestAssistant: isLatestAssistant(message),
+                            onRegenerate: { vm.regenerate() }
+                        )
+                        .id(message.id)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .top)),
+                            removal: .opacity))
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 10)
                 .padding(.bottom, 8)
+                .animation(.spring(response: 0.35, dampingFraction: 0.9),
+                           value: store.current?.messages.count)
+
+                // 底部哨兵：贴底检测（距底 < 100pt 视为贴底）
+                GeometryReader { geo in
+                    Color.clear
+                        .preference(
+                            key: ChatAtBottomKey.self,
+                            value: geo.frame(in: .named("chatScroll")).minY
+                                < UIScreen.main.bounds.height - 100)
+                }
+                .frame(height: 1)
             }
+            .coordinateSpace(name: "chatScroll")
+            .onPreferenceChange(ChatAtBottomKey.self) { pinnedToBottom = $0 }
             .onChange(of: store.current?.messages.count) { _, newCount in
-                if let count = newCount, count > 0,
-                   let last = store.current?.messages.last {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
+                guard pinnedToBottom, let count = newCount, count > 0,
+                      let last = store.current?.messages.last else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(last.id, anchor: .bottom)
                 }
             }
             // 流式跟随：由 VM 的节流 revision 信号驱动（~8 次/秒），此处再限 ~4 次/秒
             .onChange(of: vm.revision) { _, _ in
-                guard vm.isStreaming, let last = store.current?.messages.last else { return }
+                guard vm.isStreaming, pinnedToBottom,
+                      let last = store.current?.messages.last else { return }
                 guard Date().timeIntervalSince(lastScrollAt) > 0.25 else { return }
                 lastScrollAt = Date()
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
             .onChange(of: store.currentID) { _, _ in
+                pinnedToBottom = true
                 if let last = store.current?.messages.last {
                     proxy.scrollTo(last.id, anchor: .bottom)
                 }
@@ -159,21 +187,20 @@ struct ChatView: View {
         return false
     }
 
-    // MARK: 空状态（DeepSeek 式：logo + 一句问候 + 简单建议胶囊）
+    // MARK: 空状态（DeepSeek 式：logo + 一句问候 + 简单建议胶囊；整体在可视区居中）
 
     private var emptyState: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 54)
-
-            // logo：品牌蓝圆角方 + 白 N
+            // logo：主题色圆角方 + 白 N（液态玻璃徽章感）
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.brand)
+                    .fill(settings.theme.brand)
                 Text("N")
                     .font(.system(size: 25, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.white)
             }
             .frame(width: 52, height: 52)
+            .shadow(color: settings.theme.brand.opacity(0.35), radius: 14, y: 6)
 
             Text("你好，我是 \(AppInfo.displayName)")
                 .font(.system(size: 18, weight: .semibold))
@@ -190,6 +217,7 @@ struct ChatView: View {
                 HStack(spacing: 8) {
                     ForEach(suggestions, id: \.self) { s in
                         Button {
+                            Haptics.tap()
                             inputText = s
                             inputFocused = true
                         } label: {
@@ -201,13 +229,12 @@ struct ChatView: View {
                                 .background(Capsule().fill(Color.surfaceCard))
                                 .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressableButtonStyle(scale: 0.94))
                     }
                 }
+                .padding(.horizontal, 20)
                 .padding(.top, 28)
             }
-
-            Spacer(minLength: 0)
         }
     }
 
@@ -226,6 +253,7 @@ struct ChatView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             Button {
+                Haptics.tap()
                 showConversationList = true
             } label: {
                 Image(systemName: "sidebar.left")
@@ -235,10 +263,10 @@ struct ChatView: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            // 模式切换（快速/深度，随时可点；下一次发送即生效）
+            // 模式切换（快速/深度，随时可点；下一次发送即生效；切换即时高亮反馈）
             Button {
                 guard var conv = store.current else { return }
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                Haptics.tap()
                 withAnimation(.easeInOut(duration: 0.18)) {
                     conv.mode = conv.mode == .lite ? .deep : .lite
                     store.update(conv)
@@ -250,12 +278,16 @@ struct ChatView: View {
                         .frame(width: 5, height: 5)
                     Text((store.current?.mode ?? .lite).displayName)
                         .font(.system(size: 12, weight: .medium))
+                        .contentTransition(.opacity)
                 }
                 .foregroundStyle(Color.brand)
                 .padding(.horizontal, 11)
                 .padding(.vertical, 5)
-                .background(Capsule().fill(Color.brand.opacity(0.10)))
+                .background(Capsule().fill(Color.brandSoft))
+                .overlay(Capsule().strokeBorder(Color.brand.opacity(0.14), lineWidth: 1))
             }
+            .buttonStyle(PressableButtonStyle(scale: 0.94))
+            .animation(.easeInOut(duration: 0.18), value: store.current?.mode)
         }
     }
 
@@ -287,6 +319,7 @@ struct ChatView: View {
                                         .frame(width: 58, height: 58)
                                 }
                                 Button {
+                                    Haptics.tap()
                                     vm.pendingImages.removeAll { $0.id == img.id }
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
@@ -294,6 +327,7 @@ struct ChatView: View {
                                         .foregroundStyle(Color.textTertiary)
                                         .shadow(color: .white, radius: 2)
                                 }
+                                .buttonStyle(PressableButtonStyle(scale: 0.82))
                                 .offset(x: 5, y: -5)
                             }
                         }
@@ -313,6 +347,7 @@ struct ChatView: View {
                         .background(Circle().fill(Color.surfaceCard))
                         .overlay(Circle().strokeBorder(Color.glassStroke, lineWidth: 1))
                 }
+                .buttonStyle(PressableButtonStyle(scale: 0.88))
                 .disabled(vm.isStreaming)
 
                 // 输入框（玻璃胶囊内的实底白框 + 右下魔法棒）
@@ -321,7 +356,7 @@ struct ChatView: View {
                         .textFieldStyle(.plain)
                         .lineLimit(1...5)
                         .focused($inputFocused)
-                        .font(.system(size: 15.5))
+                        .font(.system(size: settings.chatFontSize + 0.5))
                         .foregroundStyle(Color.textPrimary)
                         .padding(.leading, 14)
                         .padding(.trailing, showOptimizeButton ? 40 : 14)
@@ -382,6 +417,7 @@ struct ChatView: View {
     @ViewBuilder
     private var optimizeButton: some View {
         Button {
+            Haptics.tap()
             performOptimize()
         } label: {
             Group {
@@ -396,7 +432,7 @@ struct ChatView: View {
             }
             .frame(width: 28, height: 28)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle(scale: 0.85))
         .disabled(vm.isOptimizing)
         .padding(.trailing, 6)
         .padding(.bottom, 6)
@@ -425,6 +461,7 @@ struct ChatView: View {
             if !vm.isOptimizing {
                 if vm.undoableOptimizedText != nil {
                     Button("撤销") {
+                        Haptics.tap()
                         vm.undoOptimize()
                         inputText = vm.draft
                     }
@@ -439,11 +476,18 @@ struct ChatView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Color.textTertiary)
                 }
+                .buttonStyle(PressableButtonStyle(scale: 0.85))
             }
         }
         .font(.system(size: 12))
         .foregroundStyle(Color.textSecondary)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule().fill(Color.surfaceCard)
+        )
+        .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
+        .padding(.horizontal, 4)
     }
 
     private func performOptimize() {
@@ -467,6 +511,7 @@ struct ChatView: View {
         if vm.isStreaming {
             // 停止（DeepSeek 式：白圆黑方块）
             Button {
+                Haptics.tap()
                 vm.stop()
             } label: {
                 ZStack {
@@ -479,9 +524,9 @@ struct ChatView: View {
                         .foregroundStyle(Color.textPrimary)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle(scale: 0.88))
         } else {
-            // 发送（品牌蓝实心圆）
+            // 发送（主题色实心圆）
             Button(action: performSend) {
                 ZStack {
                     Circle()
@@ -492,7 +537,7 @@ struct ChatView: View {
                         .foregroundStyle(Color.white)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle(scale: 0.86))
             .disabled(!canSendInput)
             .animation(.easeInOut(duration: 0.15), value: canSendInput)
         }
@@ -503,13 +548,15 @@ struct ChatView: View {
         (!inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !vm.pendingImages.isEmpty)
     }
 
-    /// 发送：同步本地输入到 VM → 发送 → 立即清空输入框
+    /// 发送：同步本地输入到 VM → 发送 → 立即清空输入框（贴底跟随新消息）
     private func performSend() {
         guard !vm.isStreaming else { return }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !vm.pendingImages.isEmpty else { return }
         guard settings.isConfigured else { return }
 
+        Haptics.success()
+        pinnedToBottom = true
         vm.draft = inputText
         vm.send()
         inputText = ""

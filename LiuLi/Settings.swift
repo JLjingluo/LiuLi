@@ -51,6 +51,13 @@ final class AppSettings: ObservableObject {
         static let promptOptimizerEnabled = "settings.promptOptimizerEnabled"
         static let systemPromptLite = "settings.systemPromptLite"
         static let systemPromptDeep = "settings.systemPromptDeep"
+        // v1.7 外观自定义
+        static let themeID = "settings.themeID"
+        static let chatFontSize = "settings.chatFontSize"
+        static let showAIavatar = "settings.showAIavatar"
+        static let hapticsEnabled = "settings.hapticsEnabled"
+        static let markdownEnabled = "settings.markdownEnabled"
+        static let defaultExpandReasoning = "settings.defaultExpandReasoning"
     }
 
     // MARK: 默认注入提示词（设置页可编辑，可一键恢复）
@@ -162,6 +169,34 @@ final class AppSettings: ObservableObject {
     @Published var systemPromptDeep: String {
         didSet { d.set(systemPromptDeep, forKey: Keys.systemPromptDeep) }
     }
+    // MARK: v1.7 外观自定义
+    /// 主题 id（晴空蓝 / 靛夜紫 / 青竹碧 / 落日橙 / 樱花粉 / 琥珀金）
+    @Published var themeID: String {
+        didSet {
+            d.set(themeID, forKey: Keys.themeID)
+            applyTheme()
+        }
+    }
+    /// 消息正文字号（13 小 / 15 标准 / 17 大 / 19 特大）
+    @Published var chatFontSize: Double {
+        didSet { d.set(chatFontSize, forKey: Keys.chatFontSize) }
+    }
+    /// 显示 AI 头像与名称行
+    @Published var showAIavatar: Bool {
+        didSet { d.set(showAIavatar, forKey: Keys.showAIavatar) }
+    }
+    /// 按钮触感反馈
+    @Published var hapticsEnabled: Bool {
+        didSet { d.set(hapticsEnabled, forKey: Keys.hapticsEnabled) }
+    }
+    /// 渲染 Markdown（关闭则纯文本展示）
+    @Published var markdownEnabled: Bool {
+        didSet { d.set(markdownEnabled, forKey: Keys.markdownEnabled) }
+    }
+    /// 思考链默认展开
+    @Published var defaultExpandReasoning: Bool {
+        didSet { d.set(defaultExpandReasoning, forKey: Keys.defaultExpandReasoning) }
+    }
     /// 用户是否手动改过单价（决定切模型时是否自动跟随建议价）
     private var pricingCustomized: Bool
     /// 正在自动写入建议价（避免误标为「用户手动改价」）
@@ -170,6 +205,9 @@ final class AppSettings: ObservableObject {
     // MARK: 派生
 
     var isCustom: Bool { providerID == "custom" }
+
+    /// 当前主题配色（主题切换即时生效）
+    var theme: ThemePalette { ThemePalette.palette(for: themeID) }
 
     var preset: ProviderPreset? {
         Self.presets.first { $0.id == providerID }
@@ -265,6 +303,20 @@ final class AppSettings: ObservableObject {
         self.promptOptimizerEnabled = defaults.object(forKey: Keys.promptOptimizerEnabled) as? Bool ?? true
         self.systemPromptLite = defaults.string(forKey: Keys.systemPromptLite) ?? Self.defaultLiteSystemPrompt
         self.systemPromptDeep = defaults.string(forKey: Keys.systemPromptDeep) ?? Self.defaultDeepSystemPrompt
+        // v1.7 外观自定义
+        self.themeID = defaults.string(forKey: Keys.themeID) ?? "nexus"
+        let storedSize = defaults.object(forKey: Keys.chatFontSize) as? Double ?? 15
+        self.chatFontSize = (13...19).contains(storedSize) ? storedSize : 15
+        self.showAIavatar = defaults.object(forKey: Keys.showAIavatar) as? Bool ?? true
+        self.hapticsEnabled = defaults.object(forKey: Keys.hapticsEnabled) as? Bool ?? true
+        self.markdownEnabled = defaults.object(forKey: Keys.markdownEnabled) as? Bool ?? true
+        self.defaultExpandReasoning = defaults.object(forKey: Keys.defaultExpandReasoning) as? Bool ?? false
+        applyTheme()
+    }
+
+    /// 把当前主题写入全局 Color 扩展（Color.brand 等随之变化）
+    private func applyTheme() {
+        CurrentTheme.palette = theme
     }
 
     /// 恢复某个模式的默认注入提示词

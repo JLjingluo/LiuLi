@@ -70,6 +70,11 @@ struct MessageBubble: View {
 
     // MARK: 用户气泡（右对齐，浅灰蓝 + 深色文字，DeepSeek 式）
 
+    /// 用户气泡最大宽度：随屏幕自适应（屏宽的 82%，小屏不挤、大屏不散）
+    private var userBubbleMaxWidth: CGFloat {
+        (UIScreen.main.bounds.width - 28) * 0.82
+    }
+
     private var userBubble: some View {
         VStack(alignment: .trailing, spacing: 6) {
             if !message.images.isEmpty {
@@ -77,7 +82,7 @@ struct MessageBubble: View {
             }
             if !message.text.isEmpty {
                 Text(message.text)
-                    .font(.system(size: 15.5))
+                    .font(.system(size: settings.chatFontSize + 0.5))
                     .foregroundStyle(Color.onUserBubble)
                     .textSelection(.enabled)
                     .padding(.horizontal, 14)
@@ -92,7 +97,7 @@ struct MessageBubble: View {
                         )
                         .fill(Color.userBubble)
                     )
-                    .frame(maxWidth: 286, alignment: .trailing)
+                    .frame(maxWidth: userBubbleMaxWidth, alignment: .trailing)
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -123,9 +128,11 @@ struct MessageBubble: View {
 
     private var assistantBubble: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // 头像 + 名称
+            // 头像 + 名称（可在设置中关闭头像）
             HStack(spacing: 7) {
-                aiAvatar
+                if settings.showAIavatar {
+                    aiAvatar
+                }
                 Text(AppInfo.displayName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.textTertiary)
@@ -140,9 +147,17 @@ struct MessageBubble: View {
                 ReasoningDisclosure(text: reasoning)
             }
 
-            // 正文（Markdown，无气泡）
+            // 正文（Markdown / 纯文本，随设置切换；无气泡）
             if !message.text.isEmpty {
-                MarkdownTextView(markdown: message.text)
+                if settings.markdownEnabled {
+                    MarkdownTextView(markdown: message.text, size: settings.chatFontSize)
+                } else {
+                    Text(message.text)
+                        .font(.system(size: settings.chatFontSize))
+                        .foregroundStyle(Color.textPrimary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } else if message.toolCalls.isEmpty && !isStreaming && message.errorMessage == nil {
                 HStack(spacing: 4) {
                     ForEach(0..<3, id: \.self) { i in
@@ -204,12 +219,13 @@ struct MessageBubble: View {
         HStack(spacing: 18) {
             Button {
                 UIPasteboard.general.string = message.text
+                Haptics.tap()
             } label: {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.textTertiary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle(scale: 0.85))
 
             if !message.text.isEmpty {
                 Button {
@@ -219,18 +235,19 @@ struct MessageBubble: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Color.textTertiary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableButtonStyle(scale: 0.85))
             }
 
             if isLatestAssistant, let onRegenerate {
                 Button {
+                    Haptics.tap()
                     onRegenerate()
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.textTertiary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableButtonStyle(scale: 0.85))
             }
 
             Spacer()
@@ -315,15 +332,18 @@ struct TypingDot: View {
     }
 }
 
-// MARK: - 思考链折叠（DeepSeek 式：简单文字按钮）
+// MARK: - 思考链折叠（DeepSeek 式：简单文字按钮；默认展开可设）
 
 struct ReasoningDisclosure: View {
     let text: String
+    @EnvironmentObject private var settings: AppSettings
     @State private var expanded = false
+    @State private var appeared = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button {
+                Haptics.tap()
                 withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
             } label: {
                 HStack(spacing: 4) {
@@ -334,7 +354,14 @@ struct ReasoningDisclosure: View {
                 }
                 .foregroundStyle(Color.textTertiary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle(scale: 0.95))
+            .onAppear {
+                // 首次出现时应用「默认展开」设置
+                if !appeared {
+                    appeared = true
+                    expanded = settings.defaultExpandReasoning
+                }
+            }
 
             if expanded {
                 Text(text)

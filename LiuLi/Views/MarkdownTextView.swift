@@ -1,9 +1,11 @@
 import SwiftUI
 
-// MARK: - Markdown 渲染（基于已测块级解析器）
+// MARK: - Markdown 渲染（基于已测块级解析器；字号随「设置 → 消息字号」联动）
 
 struct MarkdownTextView: View {
     let markdown: String
+    /// 正文字号（标题/列表/引用在此基础上缩放）
+    var size: CGFloat = 15
 
     var body: some View {
         let blocks = MarkdownParser.parse(markdown)
@@ -25,7 +27,7 @@ struct MarkdownTextView: View {
                 .padding(.top, 2)
 
         case .paragraph(let text):
-            InlineFormattedText(text: text, size: 15, color: .textPrimary)
+            InlineFormattedText(text: text, size: size, color: .textPrimary)
 
         case .code(let language, let content):
             CodeBlockView(language: language, content: content)
@@ -36,17 +38,17 @@ struct MarkdownTextView: View {
                     .fill(LinearGradient(colors: [Color.brand, Color.brand],
                                          startPoint: .top, endPoint: .bottom))
                     .frame(width: 3)
-                InlineFormattedText(text: text, size: 13, color: .textSecondary)
+                InlineFormattedText(text: text, size: size - 2, color: .textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
         case .listItem(let indent, let ordinal, let text):
             HStack(alignment: .top, spacing: 7) {
                 Text(ordinal.map { "\($0)." } ?? "•")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: size - 1, weight: .semibold))
                     .foregroundStyle(Color.brand)
                     .frame(minWidth: 16, alignment: .trailing)
-                InlineFormattedText(text: text, size: 14, color: .textPrimary)
+                InlineFormattedText(text: text, size: size - 1, color: .textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.leading, CGFloat(indent) * 16)
@@ -64,10 +66,10 @@ struct MarkdownTextView: View {
 
     private func headingFont(_ level: Int) -> Font {
         switch level {
-        case 1: return .system(size: 20, weight: .bold)
-        case 2: return .system(size: 18, weight: .bold)
-        case 3: return .system(size: 16, weight: .semibold)
-        default: return .system(size: 15, weight: .semibold)
+        case 1: return .system(size: size + 5, weight: .bold)
+        case 2: return .system(size: size + 3, weight: .bold)
+        case 3: return .system(size: size + 1, weight: .semibold)
+        default: return .system(size: size, weight: .semibold)
         }
     }
 }
@@ -215,6 +217,7 @@ struct CodeBlockView: View {
 
                 Button {
                     UIPasteboard.general.string = content
+                    Haptics.success()
                     withAnimation { copied = true }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                         withAnimation { copied = false }

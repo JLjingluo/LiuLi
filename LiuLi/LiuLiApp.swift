@@ -25,9 +25,9 @@ struct LiuLiApp: App {
                 .environmentObject(settings)
                 .environmentObject(router)
                 .environmentObject(store)
-                // 默认浅色系（对标 DeepSeek；深色主题仍完整适配）
+                // 默认浅色系（对标 DeepSeek；深色模式仍完整适配）
+                // tint 由 RootView 按当前主题动态下发（主题切换即时生效）
                 .preferredColorScheme(.light)
-                .tint(Color.brand)
         }
     }
 }

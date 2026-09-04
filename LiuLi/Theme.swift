@@ -8,26 +8,93 @@ enum AppInfo {
     static let tagline = "AI 编程与对话助手"
 }
 
-// MARK: - 主题（对标 DeepSeek：浅色极简 · 单一品牌蓝 · 液态玻璃）
+// MARK: - 多主题系统（v1.7）
 //
-// 设计语言：
-// 1. 全 App 只有一个强调色：品牌蓝 #4D6BFE（无渐变、无紫色、无青色）
-// 2. 背景：近白微灰 + 极淡品牌色弥散（供液态玻璃折射出层次）
+// 设计原则：
+// 1. 全 App 只有一个强调色：主题色（6 套可选，即时切换）
+// 2. 背景：近白微灰 + 主题色弥散（供液态玻璃折射出层次）
 // 3. 消息：用户浅灰蓝气泡（深色文字，DeepSeek 式）/ AI 无气泡直接排版
 // 4. 悬浮层（顶栏 / 输入栏 / Tab 栏 / 发送键）：液态玻璃
-// 5. 图标：细线系统符号，小号、灰色为主，品牌蓝点缀
+// 5. 图标：细线系统符号，小号、灰色为主，主题色点缀
+
+/// 一套主题配色（强调色 + 背景弥散斑）
+struct ThemePalette: Identifiable, Equatable {
+    let id: String
+    let name: String
+    /// 唯一强调色（按钮 / 图标 / 高亮）
+    let brand: Color
+    /// 背景弥散斑 1（大）
+    let blobA: Color
+    /// 背景弥散斑 2（小）
+    let blobB: Color
+
+    static func == (lhs: ThemePalette, rhs: ThemePalette) -> Bool { lhs.id == rhs.id }
+}
+
+extension ThemePalette {
+
+    /// 全部内置主题（设置页色板顺序）
+    static let all: [ThemePalette] = [
+        ThemePalette(id: "nexus", name: "晴空蓝",
+                     brand: Color(red: 0.302, green: 0.420, blue: 0.996),
+                     blobA: Color(red: 0.302, green: 0.420, blue: 0.996),
+                     blobB: Color(red: 0.490, green: 0.706, blue: 1.000)),
+        ThemePalette(id: "indigo", name: "靛夜紫",
+                     brand: Color(red: 0.431, green: 0.353, blue: 0.902),
+                     blobA: Color(red: 0.431, green: 0.353, blue: 0.902),
+                     blobB: Color(red: 0.596, green: 0.545, blue: 0.980)),
+        ThemePalette(id: "mint", name: "青竹碧",
+                     brand: Color(red: 0.055, green: 0.639, blue: 0.467),
+                     blobA: Color(red: 0.055, green: 0.639, blue: 0.467),
+                     blobB: Color(red: 0.208, green: 0.796, blue: 0.690)),
+        ThemePalette(id: "coral", name: "落日橙",
+                     brand: Color(red: 0.976, green: 0.420, blue: 0.290),
+                     blobA: Color(red: 0.976, green: 0.420, blue: 0.290),
+                     blobB: Color(red: 1.000, green: 0.651, blue: 0.420)),
+        ThemePalette(id: "sakura", name: "樱花粉",
+                     brand: Color(red: 0.906, green: 0.357, blue: 0.573),
+                     blobA: Color(red: 0.906, green: 0.357, blue: 0.573),
+                     blobB: Color(red: 1.000, green: 0.620, blue: 0.733)),
+        ThemePalette(id: "gold", name: "琥珀金",
+                     brand: Color(red: 0.847, green: 0.596, blue: 0.176),
+                     blobA: Color(red: 0.847, green: 0.596, blue: 0.176),
+                     blobB: Color(red: 0.976, green: 0.812, blue: 0.522))
+    ]
+
+    /// 按 id 取主题（未知 id 回退默认）
+    static func palette(for id: String) -> ThemePalette {
+        all.first { $0.id == id } ?? all[0]
+    }
+}
+
+/// 当前主题的全局持有者（线程安全；AppSettings 变更时写入，Color 扩展读取）
+enum CurrentTheme {
+    private static let lock = NSLock()
+    private static var _palette: ThemePalette = .palette(for: "nexus")
+
+    static var palette: ThemePalette {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return _palette
+        }
+        set {
+            lock.lock(); defer { lock.unlock() }
+            _palette = newValue
+        }
+    }
+}
 
 extension Color {
 
-    // MARK: 品牌色（唯一强调色）
+    // MARK: 主题色（唯一强调色，随主题即时切换）
 
-    /// DeepSeek 式品牌蓝 #4D6BFE
-    static let brand = Color(red: 0.302, green: 0.420, blue: 0.996)
+    /// 当前主题强调色（品牌色）
+    static var brand: Color { CurrentTheme.palette.brand }
 
-    /// 品牌蓝淡底（选中态 / 提示底色）
+    /// 主题色淡底（选中态 / 提示底色）
     static var brandSoft: Color {
-        uiAdaptive(light: Color(red: 0.930, green: 0.947, blue: 0.998),
-                   dark: Color(red: 0.180, green: 0.220, blue: 0.360))
+        uiAdaptive(light: CurrentTheme.palette.brand.opacity(0.11),
+                   dark: CurrentTheme.palette.brand.opacity(0.24))
     }
 
     // MARK: 语义色（浅色为默认，深色完整适配）
@@ -73,7 +140,7 @@ extension Color {
         light: UIColor(red: 0, green: 0, blue: 0, alpha: 0.06),
         dark: UIColor(red: 1, green: 1, blue: 1, alpha: 0.08))
 
-    /// 用户气泡（浅灰蓝，DeepSeek 式深字气泡，非彩色）
+    /// 用户气泡（浅灰蓝，DeepSeek 式深字气泡，中性色不随主题变，保证可读性）
     static let userBubble = dyn(
         light: UIColor(red: 0.930, green: 0.942, blue: 0.965, alpha: 1),
         dark: UIColor(red: 0.13, green: 0.14, blue: 0.18, alpha: 1))
@@ -83,10 +150,11 @@ extension Color {
         light: UIColor(red: 0.11, green: 0.12, blue: 0.15, alpha: 1),
         dark: UIColor(red: 0.94, green: 0.95, blue: 0.97, alpha: 1))
 
-    /// 工具调用底色（品牌蓝淡底）
-    static let toolChipBG = dyn(
-        light: UIColor(red: 0.302, green: 0.420, blue: 0.996, alpha: 0.07),
-        dark: UIColor(red: 0.302, green: 0.420, blue: 0.996, alpha: 0.14))
+    /// 工具调用底色（主题色淡底）
+    static var toolChipBG: Color {
+        uiAdaptive(light: CurrentTheme.palette.brand.opacity(0.07),
+                   dark: CurrentTheme.palette.brand.opacity(0.14))
+    }
 
     /// 错误色
     static let errorText = dyn(
@@ -98,20 +166,20 @@ extension Color {
         light: UIColor(red: 0.956, green: 0.961, blue: 0.966, alpha: 1),
         dark: UIColor(red: 0.09, green: 0.10, blue: 0.13, alpha: 1))
 
-    /// 品牌色上的文字（始终白色）
+    /// 主题色上的文字（始终白色）
     static let onBrand = Color.white
 
-    // MARK: 旧色名兼容（全部映射为品牌蓝，全 App 单一强调色）
+    // MARK: 旧色名兼容（映射到当前主题色，全 App 单一强调色）
 
-    static let liuliAccent = Color.brand
-    static let liuliTeal = Color.brand
-    static let liuliIndigo = Color.brand
-    static let liuliViolet = Color.brand
-    static let liuliTextPrimary = Color.textPrimary
-    static let liuliTextSecondary = Color.textSecondary
-    static let liuliTextTertiary = Color.textTertiary
+    static var liuliAccent: Color { Color.brand }
+    static var liuliTeal: Color { Color.brand }
+    static var liuliIndigo: Color { Color.brand }
+    static var liuliViolet: Color { Color.brand }
+    static var liuliTextPrimary: Color { Color.textPrimary }
+    static var liuliTextSecondary: Color { Color.textSecondary }
+    static var liuliTextTertiary: Color { Color.textTertiary }
 
-    /// 旧渐变（保留 API，实际为纯品牌蓝）
+    /// 旧渐变（保留 API，实际为纯主题色）
     static var brandGradient: LinearGradient {
         LinearGradient(colors: [Color.brand, Color.brand],
                        startPoint: .top, endPoint: .bottom)
@@ -124,6 +192,40 @@ extension Color {
         return Color(uiColor: UIColor { trait in
             trait.userInterfaceStyle == .dark ? uiDark : uiLight
         })
+    }
+}
+
+// MARK: - 触感反馈（受设置开关控制）
+
+@MainActor
+enum Haptics {
+    /// 轻点反馈（按钮按下 / 切换）
+    static func tap() {
+        guard AppSettings.shared.hapticsEnabled else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+    /// 成功反馈（发送 / 保存完成）
+    static func success() {
+        guard AppSettings.shared.hapticsEnabled else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+    /// 警告反馈（出错 / 中断）
+    static func warning() {
+        guard AppSettings.shared.hapticsEnabled else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+    }
+}
+
+// MARK: - 按压反馈按钮样式（按下缩放 + 变淡，解决“点了没反应”的观感）
+
+struct PressableButtonStyle: ButtonStyle {
+    var scale: CGFloat = 0.90
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.75), value: configuration.isPressed)
     }
 }
 
@@ -221,26 +323,28 @@ extension View {
     }
 }
 
-// MARK: - 全局弥散背景（极淡品牌色斑，为液态玻璃提供折射内容）
+// MARK: - 全局弥散背景（主题色弥散斑，为液态玻璃提供折射内容）
 
 struct LiquidGlassBackground: View {
     @State private var animate = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        let palette = CurrentTheme.palette
         ZStack {
             Color.appBackground.ignoresSafeArea()
 
-            // 极淡品牌蓝弥散：浅色下近隐形，玻璃滑过时透出流动色
+            // 主题色弥散斑 1：浅色下近隐形，玻璃滑过时透出流动色
             Circle()
-                .fill(Color.brand)
+                .fill(palette.blobA)
                 .frame(width: 320, height: 320)
                 .blur(radius: 110)
                 .opacity(scheme == .dark ? 0.15 : 0.06)
                 .offset(x: animate ? -60 : -100, y: animate ? -170 : -130)
 
+            // 主题色弥散斑 2：右下角呼应
             Circle()
-                .fill(Color.brand)
+                .fill(palette.blobB)
                 .frame(width: 260, height: 260)
                 .blur(radius: 100)
                 .opacity(scheme == .dark ? 0.10 : 0.04)
@@ -270,7 +374,7 @@ struct GlassBadge: View {
     }
 }
 
-// MARK: - 品牌胶囊按钮（保留 API，实际为纯品牌蓝实心 / 玻璃空心）
+// MARK: - 品牌胶囊按钮（保留 API，实际为主题色实心 / 玻璃空心）
 
 struct BrandCapsuleButton: View {
     let title: String

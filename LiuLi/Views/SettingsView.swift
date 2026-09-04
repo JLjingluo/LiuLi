@@ -14,6 +14,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                appearanceSection
                 providerSection
                 apiKeySection
                 modelSection
@@ -40,6 +41,90 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    // MARK: 外观（主题 / 字号 / 个性化开关）
+
+    private var appearanceSection: some View {
+        Section {
+            // 主题色板（3 列网格，点击即时切换全 App 强调色）
+            VStack(alignment: .leading, spacing: 12) {
+                Text("主题色")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.textSecondary)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
+                          spacing: 14) {
+                    ForEach(ThemePalette.all) { palette in
+                        themeSwatch(palette)
+                    }
+                }
+            }
+            .padding(.vertical, 8)
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+
+            // 消息字号（4 档，随正文/Markdown 同步缩放）
+            Picker("消息字号", selection: $settings.chatFontSize) {
+                Text("小").tag(13.0)
+                Text("标准").tag(15.0)
+                Text("大").tag(17.0)
+                Text("特大").tag(19.0)
+            }
+            .pickerStyle(.segmented)
+            .font(.system(size: 14))
+            .foregroundStyle(Color.textPrimary)
+
+            Toggle("显示 AI 头像", isOn: $settings.showAIavatar)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.textPrimary)
+            Toggle("渲染 Markdown", isOn: $settings.markdownEnabled)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.textPrimary)
+            Toggle("默认展开思考链", isOn: $settings.defaultExpandReasoning)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.textPrimary)
+            Toggle("按钮触感反馈", isOn: $settings.hapticsEnabled)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.textPrimary)
+        } header: {
+            Text("外观")
+        } footer: {
+            Text("主题色即时切换并全局生效；字号同步应用到消息正文与 Markdown；关闭 Markdown 可查看纯文本原文。")
+        }
+        .listRowBackground(Color.surfaceCard)
+    }
+
+    /// 单个主题色板圆（选中态带光环 + 对勾）
+    private func themeSwatch(_ palette: ThemePalette) -> some View {
+        let selected = settings.themeID == palette.id
+        return Button {
+            Haptics.tap()
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                settings.themeID = palette.id
+            }
+        } label: {
+            VStack(spacing: 7) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [palette.brand, palette.blobB],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 38, height: 38)
+                    if selected {
+                        Circle()
+                            .strokeBorder(palette.brand.opacity(0.45), lineWidth: 2.5)
+                            .frame(width: 46, height: 46)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color.white)
+                    }
+                }
+                .frame(height: 46)
+                Text(palette.name)
+                    .font(.system(size: 11))
+                    .foregroundStyle(selected ? palette.brand : Color.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.9))
     }
 
     // MARK: 服务商
@@ -171,7 +256,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(settings.model.isEmpty ? "点击选择模型" : settings.model)
                             .font(.system(size: 15, weight: .medium, design: .monospaced))
-                            .foregroundStyle(settings.model.isEmpty ? Color.textTertiary : .white)
+                            .foregroundStyle(settings.model.isEmpty ? Color.textTertiary : Color.textPrimary)
                         Text(modelSummary)
                             .font(.system(size: 11))
                             .foregroundStyle(Color.textTertiary)
@@ -208,7 +293,7 @@ struct SettingsView: View {
             if let error = fetchError {
                 Text(error)
                     .font(.system(size: 12))
-                    .foregroundStyle(Color(red: 1.0, green: 0.6, blue: 0.5))
+                    .foregroundStyle(Color.errorText)
             }
 
             // 重新拉取
@@ -365,7 +450,7 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section {
-            LabeledRow(label: "版本", value: "1.0.0")
+            LabeledRow(label: "版本", value: "1.7.0")
             LabeledRow(label: "工作区", value: "文件 App → 我的 iPhone → Nexus")
         } header: {
             Text("关于")

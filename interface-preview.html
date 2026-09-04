@@ -183,24 +183,24 @@ h1 { font-size: 23px; font-weight: 700; letter-spacing: .2px; }
 .actionbar { display: flex; gap: 18px; }
 .act { font-size: 13px; color: var(--text3); }
 
-/* ============ 悬浮液态玻璃输入胶囊（收窄 + 叠在消息上方折射） ============ */
+/* ============ 悬浮液态玻璃输入胶囊（贴住 Tab 栏成一体 + 折射） ============ */
 .inputzone {
   flex: none; position: relative; z-index: 7;
-  margin: -72px 34px 8px;
+  margin: -64px 12px 0;
   padding: 7px 10px 3px;
-  border-radius: 26px;
+  border-radius: 24px 24px 0 0;
   background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.35));
   backdrop-filter: blur(30px) saturate(190%);
   -webkit-backdrop-filter: blur(30px) saturate(190%);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.92),   /* 顶缘高光 */
     inset 0 -1px 0 rgba(255,255,255,.38), /* 底缘反光 */
-    inset 1px 0 0 rgba(255,255,255,.5),    /* 侧缘折射 */
-    0 14px 36px rgba(30,40,70,.16);        /* 悬浮影 */
+    inset 1px 0 0 rgba(255,255,255,.5),   /* 侧缘折射 */
+    0 -6px 30px rgba(30,40,70,.08);       /* 向上悬浮影 */
 }
 /* 斜向液态高光（玻璃流光） */
 .inputzone::after {
-  content: ""; position: absolute; inset: 0; border-radius: 26px; pointer-events: none;
+  content: ""; position: absolute; inset: 0; border-radius: 24px 24px 0 0; pointer-events: none;
   background: linear-gradient(115deg,
     rgba(255,255,255,.42) 0%, rgba(255,255,255,0) 20%,
     rgba(255,255,255,0) 58%, rgba(255,255,255,.22) 100%);

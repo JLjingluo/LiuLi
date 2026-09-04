@@ -281,19 +281,19 @@ struct EditorView: View {
     @State private var loaded = false
     @State private var showPreview = false
     @State private var savedFlash = false
+    /// 底部统计文案（编辑时防抖 0.4s 再算，修大文件滑动/输入卡顿）
+    @State private var statsText = "1 行 · 0 字节"
+    @State private var statsTask: Task<Void, Never>?
 
     private var isHTML: Bool {
         ["html", "htm"].contains((fileURL.lastPathComponent as NSString).pathExtension.lowercased())
-    }
-
-    private var lineCount: Int {
-        max(1, content.split(whereSeparator: { $0 == "\n" || $0 == "\r" || $0 == "\r\n" }).count)
     }
 
     var body: some View {
         TextEditor(text: $content)
             .font(.system(size: 13, design: .monospaced))
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.immediately)
             .background(Color.appBackground)
             .padding(.horizontal, 8)
             .navigationTitle(fileURL.lastPathComponent)
@@ -324,7 +324,7 @@ struct EditorView: View {
             .toolbar {
                 ToolbarItem(placement: .bottomBar) {
                     HStack {
-                        Text("\(lineCount) 行 · \(content.utf8.count) 字节")
+                        Text(statsText)
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(Color.textTertiary)
                         Spacer()
@@ -338,10 +338,36 @@ struct EditorView: View {
                     }
                 }
             }
-            .onAppear(perform: load)
+            .onAppear {
+                load()
+                updateStats(immediate: true)
+            }
+            .onChange(of: content) { _, _ in
+                updateStats()
+            }
             .sheet(isPresented: $showPreview) {
                 HTMLPreviewSheet(title: fileURL.lastPathComponent, fileURL: fileURL, html: nil)
             }
+    }
+
+    /// 统计防抖：停止输入 0.4s 后才计算行数/字节数
+    private func updateStats(immediate: Bool = false) {
+        if immediate {
+            statsTask?.cancel()
+            statsText = Self.stats(for: content)
+            return
+        }
+        statsTask?.cancel()
+        statsTask = Task {
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            statsText = Self.stats(for: content)
+        }
+    }
+
+    private static func stats(for text: String) -> String {
+        let lines = max(1, text.split(separator: "\n", omittingEmptySubsequences: false).count)
+        return "\(lines) 行 · \(text.utf8.count) 字节"
     }
 
     private func relativePath() -> String {

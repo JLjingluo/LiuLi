@@ -55,5 +55,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<!-- 灵动岛 / 锁屏实时活动（生成中显示进度） -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 </dict>
 </plist>

@@ -25,6 +25,8 @@ final class ChatViewModel: ObservableObject {
     @Published var isOptimizing = false
     /// 优化完成后待撤销的原文（nil = 无可撤销）
     @Published var undoableOptimizedText: String?
+    /// 流式刷新信号（节流后 ~8 次/秒，视图据此跟随滚动）
+    @Published private(set) var revision: Int = 0
 
     // 依赖
     private let store: ConversationStore
@@ -32,6 +34,12 @@ final class ChatViewModel: ObservableObject {
     private let toolBox: AgentToolBox
     private var streamTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
+    private var pendingFlush: Task<Void, Never>?
+    private var lastFlushAt = Date.distantPast
+    /// 最近一次收到流数据的时间（后台挂起检测用）
+    private var lastChunkAt = Date()
+    /// 后台任务断言（切后台后争取 ~30s 继续生成）
+    private var bgTask: UIBackgroundTaskIdentifier = .invalid
 
     /// 工具循环最大轮数（防死循环）
     static let maxToolRounds = 8
@@ -53,11 +61,14 @@ final class ChatViewModel: ObservableObject {
     - 直接输出优化后的提示词本身，不要任何解释、前后缀或引号包裹
     """
 
-    /// 优化输入框草稿；成功返回优化文本并写入 draft（可撤销），失败返回错误描述
+    /// 优化输入框草稿；成功返回 nil 并写入 draft（可撤销），失败返回中文错误描述
     @discardableResult
     func optimizeDraft() async -> String? {
         let raw = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !raw.isEmpty, !isStreaming, !isOptimizing, settings.isConfigured else { return nil }
+        guard !raw.isEmpty else { return "请先输入要优化的内容" }
+        guard !isOptimizing else { return nil }
+        guard !isStreaming else { return "正在生成回复，请等结束后再优化" }
+        guard settings.isConfigured else { return "请先在「设置」中完成 API 配置，才能使用提示词优化" }
 
         isOptimizing = true
         defer { isOptimizing = false }
@@ -69,6 +80,7 @@ final class ChatViewModel: ObservableObject {
             ),
             includeUsage: false
         )
+        // 不带 temperature / max_tokens：部分模型（推理系/新模型）会因这两个参数直接 400
         let payload = ChatCompletionRequest(
             model: settings.model,
             messages: [
@@ -76,8 +88,8 @@ final class ChatViewModel: ObservableObject {
                 APIPayloadMessage(role: "user", content: .text(raw))
             ],
             stream: true,
-            temperature: 0.3,
-            max_tokens: 600,
+            temperature: nil,
+            max_tokens: nil,
             tools: nil,
             tool_choice: nil,
             stream_options: nil
@@ -91,7 +103,7 @@ final class ChatViewModel: ObservableObject {
             }
         } catch {
             undoableOptimizedText = nil
-            return "优化失败：\(error.localizedDescription)"
+            return "优化失败：\(APIClient.describe(error))"
         }
 
         let optimized = accumulator.content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -175,6 +187,38 @@ final class ChatViewModel: ObservableObject {
         streamTask?.cancel()
         streamTask = nil
         isStreaming = false
+        GenerationActivityCenter.shared.end()
+    }
+
+    /// 前台恢复检查：后台挂起导致的僵死流（长时间无数据）自动收尾，避免界面按钮被卡死
+    func recoverIfNeeded() {
+        guard isStreaming else { return }
+        guard Date().timeIntervalSince(lastChunkAt) > 75 else { return }
+        stop()
+        if var conv = store.current, let last = conv.messages.last, last.role == .assistant {
+            if last.text.isEmpty {
+                conv.messages[conv.messages.count - 1].text = "（后台挂起导致生成中断，请点重新生成）"
+            } else {
+                conv.messages[conv.messages.count - 1].errorMessage = "（后台挂起导致中断，内容可能不完整）"
+            }
+            flush(conv)
+            store.persistToDisk(conv)
+        }
+    }
+
+    // MARK: 后台任务断言（切后台后争取 ~30s 完成生成）
+
+    private func beginBackgroundWork() {
+        guard bgTask == .invalid else { return }
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "NexusGeneration") { [weak self] in
+            self?.endBackgroundWork()
+        }
+    }
+
+    private func endBackgroundWork() {
+        guard bgTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(bgTask)
+        bgTask = .invalid
     }
 
     // MARK: 生成主循环
@@ -185,11 +229,18 @@ final class ChatViewModel: ObservableObject {
         let mode = conversation.mode
 
         isStreaming = true
+        lastChunkAt = Date()
+        GenerationActivityCenter.shared.start(modeName: mode.displayName)
+        beginBackgroundWork()
+
         streamTask = Task { [weak self] in
             guard let self else { return }
             defer {
                 self.isStreaming = false
-                self.store.persistToDisk(conversation) // 最终落盘
+                self.flush(conversation)                 // 立即刷出最终状态
+                self.store.persistToDisk(conversation)  // 最终落盘
+                self.endBackgroundWork()
+                GenerationActivityCenter.shared.end()
             }
 
             let client = APIClient(
@@ -226,7 +277,7 @@ final class ChatViewModel: ObservableObject {
                 var assistantMessage = ChatMessage(role: .assistant)
                 conversation.messages.append(assistantMessage)
                 let assistantIndex = conversation.messages.count - 1
-                self.refresh(conversation)
+                self.refresh(conversation, immediate: true)
 
                 let accumulator = StreamAccumulator()
                 var streamError: Error?
@@ -234,8 +285,9 @@ final class ChatViewModel: ObservableObject {
                 do {
                     for try await chunk in client.streamChat(request: payload) {
                         if Task.isCancelled { break }
+                        self.lastChunkAt = Date()
                         accumulator.ingest(chunk)
-                        // 增量更新占位消息（直接改内存，节流落盘）
+                        // 增量更新占位消息（直接改内存，节流落盘 + 节流刷 UI）
                         if let delta = chunk.choices?.first?.delta {
                             if let c = delta.content, !c.isEmpty {
                                 conversation.messages[assistantIndex].text += c
@@ -257,7 +309,7 @@ final class ChatViewModel: ObservableObject {
                         conversation.messages[assistantIndex].text.isEmpty
                             ? "（已停止）"
                             : conversation.messages[assistantIndex].text
-                    self.refresh(conversation)
+                    self.refresh(conversation, immediate: true)
                     return
                 }
 
@@ -269,7 +321,7 @@ final class ChatViewModel: ObservableObject {
                     conversation.messages[assistantIndex].text = accumulator.content
                     conversation.messages[assistantIndex].reasoning = accumulator.reasoning.isEmpty ? nil : accumulator.reasoning
                     conversation.messages[assistantIndex].usage = accumulator.usage
-                    self.refresh(conversation)
+                    self.refresh(conversation, immediate: true)
 
                     // 4b. 逐个执行工具并回填结果
                     for call in calls {
@@ -280,7 +332,7 @@ final class ChatViewModel: ObservableObject {
                             toolCallID: call.id,
                             toolName: call.name
                         ))
-                        self.refresh(conversation)
+                        self.refresh(conversation, immediate: true)
                     }
                     continue // 下一轮
                 }
@@ -295,15 +347,16 @@ final class ChatViewModel: ObservableObject {
                 conversation.messages[assistantIndex].usage = accumulator.usage
 
                 if let error = streamError {
+                    let message = APIClient.describe(error)
                     let hasPartial = !conversation.messages[assistantIndex].text.isEmpty
                     conversation.messages[assistantIndex].errorMessage = hasPartial
-                        ? "（生成中断：\(error.localizedDescription)）"
-                        : error.localizedDescription
+                        ? "（生成中断：\(message)）"
+                        : message
                 }
                 if accumulator.content.isEmpty && streamError == nil && conversation.messages[assistantIndex].text.isEmpty {
                     conversation.messages[assistantIndex].text = "（模型未返回内容）"
                 }
-                self.refresh(conversation)
+                self.refresh(conversation, immediate: true)
                 return
             }
 
@@ -312,14 +365,36 @@ final class ChatViewModel: ObservableObject {
                 role: .note,
                 text: "已达到工具调用轮数上限（\(Self.maxToolRounds)），已停止以避免循环。"
             ))
-            self.refresh(conversation)
+            self.refresh(conversation, immediate: true)
         }
     }
 
-    /// 内存即时更新 + 节流落盘（流式期间避免每 token 写盘）
-    private func refresh(_ conversation: Conversation) {
+    /// 内存更新 + 双节流（UI ~8 次/秒、落盘 0.9s 防抖）
+    /// —— 修复：此前每个 token 全量刷新 UI，导致点击被吞、滚动卡顿、消息闪跳
+    private func refresh(_ conversation: Conversation, immediate: Bool = false) {
+        if immediate || Date().timeIntervalSince(lastFlushAt) >= 0.12 {
+            flush(conversation)
+        } else {
+            let snapshot = conversation
+            pendingFlush?.cancel()
+            pendingFlush = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                guard !Task.isCancelled, let self else { return }
+                self.flush(snapshot)
+            }
+        }
+    }
+
+    /// 立即把会话快照写进内存（触发 UI 刷新）并安排落盘
+    private func flush(_ conversation: Conversation) {
+        lastFlushAt = Date()
+        revision += 1
         store.update(conversation, persist: false)
         schedulePersist(conversation)
+        // 灵动岛 / 锁屏实时活动（内部自带 1s 节流）
+        if let last = conversation.messages.last, last.role == .assistant {
+            GenerationActivityCenter.shared.update(last.text)
+        }
     }
 
     private func schedulePersist(_ conversation: Conversation) {

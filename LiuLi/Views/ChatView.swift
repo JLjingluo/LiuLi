@@ -20,7 +20,9 @@ struct ChatView: View {
     @State private var showVisionAlert = false
     @State private var forceVisionBypass = false
     @State private var optimizeError: String?
+    @State private var lastScrollAt = Date.distantPast
     @FocusState private var inputFocused: Bool
+    @Environment(\.scenePhase) private var scenePhase
 
     /// 建议提问（DeepSeek 式简单文字胶囊，按模式给出）
     private var suggestions: [String] {
@@ -37,13 +39,13 @@ struct ChatView: View {
                 }
                 messageList
             }
-            // 悬浮液态玻璃输入胶囊：收窄悬浮（消息从玻璃下方滚过折射）
+            // 悬浮液态玻璃输入胶囊：贴住 Tab 栏形成一体（消息从玻璃下方滚过折射）
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 inputBar
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
-                    .padding(.bottom, 8)
-                    .liquidGlass(cornerRadius: 26)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
+                    .padding(.bottom, 0)
+                    .liquidGlass(cornerRadius: 24)
             }
             .navigationTitle(store.current?.title ?? "对话")
             .navigationBarTitleDisplayMode(.inline)
@@ -59,6 +61,21 @@ struct ChatView: View {
                     router.pendingPrompt = nil
                     inputFocused = true
                 }
+            }
+            // Siri 快捷指令：提问（自动填入输入框并聚焦）
+            .onReceive(NotificationCenter.default.publisher(for: .nexusSiriPrompt)) { note in
+                if let prompt = note.object as? String, !prompt.isEmpty {
+                    inputText = prompt
+                    inputFocused = true
+                }
+            }
+            // Siri 快捷指令：新建对话
+            .onReceive(NotificationCenter.default.publisher(for: .nexusSiriNewChat)) { _ in
+                _ = store.create(mode: store.current?.mode ?? .lite)
+            }
+            // 回到前台：检查后台挂起导致的僵死流并自动收尾
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { vm.recoverIfNeeded() }
             }
         }
     }
@@ -114,11 +131,12 @@ struct ChatView: View {
                     }
                 }
             }
-            .onChange(of: store.current?.messages.last?.text) { _, newValue in
-                // 流式输出期间跟随滚动
-                if vm.isStreaming, let last = store.current?.messages.last, newValue != nil {
-                    proxy.scrollTo(last.id, anchor: .bottom)
-                }
+            // 流式跟随：由 VM 的节流 revision 信号驱动（~8 次/秒），此处再限 ~4 次/秒
+            .onChange(of: vm.revision) { _, _ in
+                guard vm.isStreaming, let last = store.current?.messages.last else { return }
+                guard Date().timeIntervalSince(lastScrollAt) > 0.25 else { return }
+                lastScrollAt = Date()
+                proxy.scrollTo(last.id, anchor: .bottom)
             }
             .onChange(of: store.currentID) { _, _ in
                 if let last = store.current?.messages.last {
@@ -217,9 +235,11 @@ struct ChatView: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            // 模式切换（快速/深度，DeepSeek 式胶囊）
+            // 模式切换（快速/深度，随时可点；下一次发送即生效）
             Button {
-                if var conv = store.current, !vm.isStreaming {
+                guard var conv = store.current else { return }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                withAnimation(.easeInOut(duration: 0.18)) {
                     conv.mode = conv.mode == .lite ? .deep : .lite
                     store.update(conv)
                 }
@@ -236,7 +256,6 @@ struct ChatView: View {
                 .padding(.vertical, 5)
                 .background(Capsule().fill(Color.brand.opacity(0.10)))
             }
-            .disabled(vm.isStreaming)
         }
     }
 
@@ -285,13 +304,8 @@ struct ChatView: View {
             }
 
             HStack(alignment: .bottom, spacing: 8) {
-                // 「+」附件（玻璃上的简单灰圆）
-                Menu {
-                    PhotosPicker(selection: $photoSelection, maxSelectionCount: 3, matching: .images) {
-                        Label("相册选图（识图）", systemImage: "photo")
-                    }
-                    .disabled(vm.isStreaming)
-                } label: {
+                // 「+」附件（直接弹出相册选图；勿嵌在 Menu 里——Menu 会导致选择器弹不出、点击无响应）
+                PhotosPicker(selection: $photoSelection, maxSelectionCount: 3, matching: .images) {
                     Image(systemName: "plus")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Color.textSecondary)
@@ -399,7 +413,8 @@ struct ChatView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Color.errorText)
                 Text(err)
-                    .lineLimit(1)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
             } else {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 11))
@@ -432,13 +447,14 @@ struct ChatView: View {
     }
 
     private func performOptimize() {
-        guard !vm.isOptimizing, !vm.isStreaming, settings.isConfigured else { return }
+        guard !vm.isOptimizing else { return }
         let text = inputText
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         optimizeError = nil
         Task {
             vm.draft = text
             if let error = await vm.optimizeDraft() {
+                // 未配置 / 网络失败等原因，直接在状态条展示中文提示
                 optimizeError = error
             } else {
                 inputText = vm.draft

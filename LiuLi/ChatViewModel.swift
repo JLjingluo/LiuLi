@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - 待发送图片（识图）
 
 struct PendingImage: Identifiable, Equatable {
-    let id: UUID
+    let id = UUID()
     let dataURL: String
 
     var thumbnail: UIImage? {

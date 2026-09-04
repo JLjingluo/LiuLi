@@ -123,6 +123,11 @@ final class AppSettings: ObservableObject {
         baseURL != nil && !apiKey.trimmingCharacters(in: .whitespaces).isEmpty && !model.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    /// 当前模型是否疑似支持视觉（多模态），供设置页提示用
+    var modelSupportsVisionFlag: Bool {
+        VisionCapability.likelySupportsVision(modelID: model)
+    }
+
     /// 候选模型列表 = 拉取结果 + 手动补充（去重）
     var modelCandidates: [String] {
         var seen = Set<String>()

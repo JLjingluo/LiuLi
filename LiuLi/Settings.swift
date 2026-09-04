@@ -45,6 +45,32 @@ final class AppSettings: ObservableObject {
         static let model = "settings.model"
         static let manualModels = "settings.manualModels"
         static let includeUsage = "settings.includeUsage"
+        static let inputPricePerM = "settings.inputPricePerM"
+        static let outputPricePerM = "settings.outputPricePerM"
+        static let pricingCustomized = "settings.pricingCustomized"
+        static let promptOptimizerEnabled = "settings.promptOptimizerEnabled"
+    }
+
+    /// 模型价格（元 / 百万 tokens）
+    struct ModelPricing: Equatable {
+        var input: Double
+        var output: Double
+    }
+
+    /// 常见模型默认单价（元/百万 tokens），未知模型回退 DeepSeek 档
+    static func suggestedPricing(forModel modelID: String) -> ModelPricing {
+        let m = modelID.lowercased()
+        if m.contains("deepseek-reasoner") { return ModelPricing(input: 4, output: 16) }
+        if m.contains("deepseek") { return ModelPricing(input: 2, output: 8) }
+        if m.contains("gpt-4o-mini") { return ModelPricing(input: 1.1, output: 4.3) }
+        if m.contains("gpt-4o") { return ModelPricing(input: 16.5, output: 66) }
+        if m.contains("o4-mini") || m.contains("o3-mini") { return ModelPricing(input: 8, output: 32) }
+        if m.contains("glm-4-flash") || m.contains("glm-4.5-flash") { return ModelPricing(input: 0, output: 0) }
+        if m.contains("glm-4") { return ModelPricing(input: 14, output: 14) }
+        if m.contains("moonshot-v1-8k") { return ModelPricing(input: 12, output: 12) }
+        if m.contains("qwen-turbo") { return ModelPricing(input: 0.3, output: 0.6) }
+        if m.contains("qwen-plus") { return ModelPricing(input: 0.8, output: 2) }
+        return ModelPricing(input: 2, output: 8)
     }
 
     private let keychainService = "com.liulidev.assistant"
@@ -66,7 +92,10 @@ final class AppSettings: ObservableObject {
     }
     /// 当前选择模型（手动输入或从列表选择）
     @Published var model: String {
-        didSet { d.set(model, forKey: Keys.model) }
+        didSet {
+            d.set(model, forKey: Keys.model)
+            applySuggestedPricingIfNotCustomized()
+        }
     }
     /// 拉取到的模型列表
     @Published var availableModels: [String] = []
@@ -78,6 +107,28 @@ final class AppSettings: ObservableObject {
     @Published var includeUsage: Bool {
         didSet { d.set(includeUsage, forKey: Keys.includeUsage) }
     }
+    /// 输入单价（元 / 百万 tokens）
+    @Published var inputPricePerM: Double {
+        didSet {
+            d.set(inputPricePerM, forKey: Keys.inputPricePerM)
+            if !isApplyingSuggested { d.set(true, forKey: Keys.pricingCustomized) }
+        }
+    }
+    /// 输出单价（元 / 百万 tokens）
+    @Published var outputPricePerM: Double {
+        didSet {
+            d.set(outputPricePerM, forKey: Keys.outputPricePerM)
+            if !isApplyingSuggested { d.set(true, forKey: Keys.pricingCustomized) }
+        }
+    }
+    /// 提示词优化（输入框右下角魔法棒）
+    @Published var promptOptimizerEnabled: Bool {
+        didSet { d.set(promptOptimizerEnabled, forKey: Keys.promptOptimizerEnabled) }
+    }
+    /// 用户是否手动改过单价（决定切模型时是否自动跟随建议价）
+    private var pricingCustomized: Bool
+    /// 正在自动写入建议价（避免误标为「用户手动改价」）
+    private var isApplyingSuggested = false
 
     // MARK: 派生
 
@@ -163,6 +214,38 @@ final class AppSettings: ObservableObject {
         self.model = defaults.string(forKey: Keys.model) ?? ""
         self.manualModels = defaults.string(forKey: Keys.manualModels) ?? ""
         self.includeUsage = defaults.object(forKey: Keys.includeUsage) as? Bool ?? true
+        self.pricingCustomized = defaults.bool(forKey: Keys.pricingCustomized)
+        if let inP = defaults.object(forKey: Keys.inputPricePerM) as? Double,
+           let outP = defaults.object(forKey: Keys.outputPricePerM) as? Double {
+            self.inputPricePerM = inP
+            self.outputPricePerM = outP
+        } else {
+            let p = Self.suggestedPricing(forModel: self.model)
+            self.inputPricePerM = p.input
+            self.outputPricePerM = p.output
+        }
+        self.promptOptimizerEnabled = defaults.object(forKey: Keys.promptOptimizerEnabled) as? Bool ?? true
+    }
+
+    /// 切模型时自动跟随建议单价（用户手动改过则不动）
+    private func applySuggestedPricingIfNotCustomized() {
+        guard !pricingCustomized else { return }
+        isApplyingSuggested = true
+        let p = Self.suggestedPricing(forModel: model)
+        inputPricePerM = p.input
+        outputPricePerM = p.output
+        isApplyingSuggested = false
+    }
+
+    /// 恢复当前模型的建议单价（设置页按钮），并恢复自动跟随
+    func resetPricingToSuggested() {
+        isApplyingSuggested = true
+        let p = Self.suggestedPricing(forModel: model)
+        inputPricePerM = p.input
+        outputPricePerM = p.output
+        isApplyingSuggested = false
+        pricingCustomized = false
+        d.set(false, forKey: Keys.pricingCustomized)
     }
 }
 

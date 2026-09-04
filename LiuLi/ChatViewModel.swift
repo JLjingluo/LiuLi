@@ -22,6 +22,9 @@ final class ChatViewModel: ObservableObject {
     @Published var pendingImages: [PendingImage] = []
     @Published var isStreaming = false
     @Published var visionWarning: String?
+    @Published var isOptimizing = false
+    /// 优化完成后待撤销的原文（nil = 无可撤销）
+    @Published var undoableOptimizedText: String?
 
     // 依赖
     private let store: ConversationStore
@@ -44,12 +47,79 @@ final class ChatViewModel: ObservableObject {
     // MARK: 系统提示
 
     private static let liteSystemPrompt = """
-    你是「琉璃」，一个简洁高效的手机助手。请用简体中文回答，直击要点，默认不使用 Markdown 标题与加粗，短问题给短答案。
+    你是「璇玑」，一个简洁高效的手机助手。请用简体中文回答，直击要点，默认不使用 Markdown 标题与加粗，短问题给短答案。
     """
 
     private static let deepSystemPrompt = """
-    你是「琉璃」，一个专业的 AI 编程与文件助手。工作区内文件可通过工具访问。回答使用 Markdown；代码放入代码块并标注语言；涉及文件操作时优先使用工具完成而非只给建议。
+    你是「璇玑」，一个专业的 AI 编程与文件助手。工作区内文件可通过工具访问。回答使用 Markdown；代码放入代码块并标注语言；涉及文件操作时优先使用工具完成而非只给建议。
     """
+
+    // MARK: 提示词优化
+
+    private static let optimizerSystemPrompt = """
+    你是提示词优化专家。把用户给你的原句改写成一条清晰、具体、可直接发给 AI 助手的中文提示词：
+    - 补全缺失的上下文、目标与期望的输出形式（如字数、格式、风格）
+    - 忠于用户原意，不臆造额外约束
+    - 直接输出优化后的提示词本身，不要任何解释、前后缀或引号包裹
+    """
+
+    /// 优化输入框草稿；成功返回优化文本并写入 draft（可撤销），失败返回错误描述
+    @discardableResult
+    func optimizeDraft() async -> String? {
+        let raw = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty, !isStreaming, !isOptimizing, settings.isConfigured else { return nil }
+
+        isOptimizing = true
+        defer { isOptimizing = false }
+
+        let client = APIClient(
+            endpoint: APIClient.Endpoint(
+                base: settings.baseURL ?? URL(fileURLWithPath: "/"),
+                apiKey: settings.apiKey
+            ),
+            includeUsage: false
+        )
+        let payload = ChatCompletionRequest(
+            model: settings.model,
+            messages: [
+                .system(Self.optimizerSystemPrompt),
+                APIPayloadMessage(role: "user", content: .text(raw))
+            ],
+            stream: true,
+            temperature: 0.3,
+            max_tokens: 600,
+            tools: nil,
+            tool_choice: nil,
+            stream_options: nil
+        )
+
+        let accumulator = StreamAccumulator()
+        do {
+            for try await chunk in client.streamChat(request: payload) {
+                if Task.isCancelled { break }
+                accumulator.ingest(chunk)
+            }
+        } catch {
+            undoableOptimizedText = nil
+            return "优化失败：\(error.localizedDescription)"
+        }
+
+        let optimized = accumulator.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !optimized.isEmpty else {
+            undoableOptimizedText = nil
+            return "模型未返回优化结果，请重试"
+        }
+        undoableOptimizedText = raw
+        draft = optimized
+        return nil
+    }
+
+    /// 撤销最近一次优化
+    func undoOptimize() {
+        guard let original = undoableOptimizedText else { return }
+        draft = original
+        undoableOptimizedText = nil
+    }
 
     private var contextOptions: ContextBuildOptions {
         ContextBuildOptions(

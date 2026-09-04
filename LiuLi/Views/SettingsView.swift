@@ -18,6 +18,7 @@ struct SettingsView: View {
                 apiKeySection
                 modelSection
                 usageSection
+                optimizerSection
                 aboutSection
             }
             .listStyle(.insetGrouped)
@@ -255,17 +256,68 @@ struct SettingsView: View {
         manualModelInput = ""
     }
 
-    // MARK: 用量偏好
+    // MARK: 用量偏好与费用估算
 
     private var usageSection: some View {
         Section {
-            Toggle("流式返回 Token 用量", isOn: $settings.includeUsage)
+            Toggle("显示本次花费", isOn: $settings.includeUsage)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.textPrimary)
+            HStack {
+                Text("输入单价")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.textPrimary)
+                Spacer()
+                TextField("2", value: $settings.inputPricePerM, format: .number.precision(.fractionLength(0...4)))
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundStyle(Color.textSecondary)
+                    .frame(width: 90)
+                Text("元/百万")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.textTertiary)
+            }
+            HStack {
+                Text("输出单价")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.textPrimary)
+                Spacer()
+                TextField("8", value: $settings.outputPricePerM, format: .number.precision(.fractionLength(0...4)))
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundStyle(Color.textSecondary)
+                    .frame(width: 90)
+                Text("元/百万")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.textTertiary)
+            }
+            Button {
+                settings.resetPricingToSuggested()
+            } label: {
+                Label("恢复当前模型建议单价", systemImage: "arrow.counterclockwise")
+                    .font(.system(size: 13.5))
+            }
+        } header: {
+            Text("费用估算")
+        } footer: {
+            Text("每条回复下方按 Token 用量估算花费（¥）。切换模型时自动套用常见模型单价，可手动修改。个别服务商不支持 stream_options，若报错可关闭「显示本次花费」。")
+        }
+        .listRowBackground(Color.surfaceCard)
+    }
+
+    // MARK: 提示词优化
+
+    private var optimizerSection: some View {
+        Section {
+            Toggle("启用提示词优化", isOn: $settings.promptOptimizerEnabled)
                 .font(.system(size: 14))
                 .foregroundStyle(Color.textPrimary)
         } header: {
-            Text("用量")
+            Text("提示词优化")
         } footer: {
-            Text("个别服务商不支持 stream_options，若报错可关闭。")
+            Text("开启后，输入框右下角出现魔法棒按钮，一键把草稿改写成更清晰、具体的提示词，可随时撤销。")
         }
         .listRowBackground(Color.surfaceCard)
     }

@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus 璇玑 · 界面复刻</title>
+<style>
+/* ================= 主题变量（深浅色） ================= */
+:root, [data-theme="dark"] {
+  --bg: #0b0e1c;
+  --bg-soft: #11142a;
+  --glass: rgba(255,255,255,0.06);
+  --glass-strong: rgba(255,255,255,0.10);
+  --glass-bar: rgba(16,19,38,0.78);
+  --stroke: rgba(255,255,255,0.16);
+  --stroke-soft: rgba(255,255,255,0.09);
+  --text: #f2f5fa;
+  --text2: #b8bfd1;
+  --text3: #7a8090;
+  --teal: #33b8c7;
+  --indigo: #6157e6;
+  --violet: #9e5cf0;
+  --accent: #59c7db;
+  --error: #ff8475;
+  --code-bg: #191c26;
+  --tool-bg: rgba(33,140,158,0.10);
+  --card-shadow: 0 8px 32px rgba(0,0,0,0.45);
+}
+[data-theme="light"] {
+  --bg: #f6f7fa;
+  --bg-soft: #eef0f6;
+  --glass: rgba(255,255,255,0.82);
+  --glass-strong: rgba(255,255,255,0.95);
+  --glass-bar: rgba(255,255,255,0.86);
+  --stroke: rgba(0,0,0,0.08);
+  --stroke-soft: rgba(0,0,0,0.05);
+  --text: #1c1f24;
+  --text2: #5c616b;
+  --text3: #8c919e;
+  --teal: #1d9db1;
+  --indigo: #5349d6;
+  --violet: #8344e0;
+  --accent: #2298b8;
+  --error: #cc382e;
+  --code-bg: #f2f4f7;
+  --tool-bg: rgba(29,157,177,0.08);
+  --card-shadow: 0 8px 28px rgba(30,40,70,0.14);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  transition: background .3s, color .3s;
+  -webkit-font-smoothing: antialiased;
+}
+.page {
+  max-width: 1780px; margin: 0 auto; padding: 34px 26px 60px;
+}
+
+/* ================= 页头 ================= */
+.pagehead { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 8px; }
+.brandrow { display: flex; align-items: center; gap: 14px; }
+.logo {
+  width: 52px; height: 52px; border-radius: 15px; flex: none;
+  background: linear-gradient(135deg, var(--teal), var(--indigo));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; color: #fff;
+  box-shadow: 0 10px 26px rgba(97,87,230,.35);
+}
+h1 { font-size: 25px; letter-spacing: .3px; }
+.sub { color: var(--text3); font-size: 13px; margin-top: 3px; }
+.actions { display: flex; gap: 10px; }
+.toggle-btn {
+  border: 1px solid var(--stroke); background: var(--glass); color: var(--text);
+  padding: 9px 16px; border-radius: 999px; font-size: 13px; cursor: pointer;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  transition: transform .15s;
+}
+.toggle-btn:active { transform: scale(.96); }
+
+.legend { margin: 18px 0 26px; color: var(--text2); font-size: 13px; line-height: 1.8; }
+.legend b { color: var(--text); }
+.pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11.5px; border: 1px solid var(--stroke); background: var(--glass); margin: 0 2px; }
+
+/* ================= 画布 ================= */
+.board { display: flex; flex-wrap: wrap; gap: 34px 26px; justify-content: center; }
+.shot { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.caption { font-size: 12.5px; color: var(--text3); display: flex; align-items: center; gap: 7px; }
+.caption .no {
+  width: 19px; height: 19px; border-radius: 6px; flex: none; font-size: 11px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, var(--teal), var(--indigo));
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* ================= 手机机身 ================= */
+.phone {
+  width: 375px; height: 746px; border-radius: 54px; padding: 11px; position: relative;
+  background: linear-gradient(160deg, #3a3f55, #171a2e);
+  box-shadow: var(--card-shadow), inset 0 0 0 1.5px rgba(255,255,255,.14);
+  flex: none;
+}
+[data-theme="light"] .phone { background: linear-gradient(160deg, #d8dbe6, #9aa0b4); }
+.screen {
+  width: 100%; height: 100%; border-radius: 44px; overflow: hidden; position: relative;
+  background: var(--bg); display: flex; flex-direction: column;
+}
+/* 壁纸弥散（液态玻璃背景） */
+.screen::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(420px 320px at 82% -6%, rgba(97,87,230,.20), transparent 65%),
+    radial-gradient(380px 300px at 6% 104%, rgba(51,184,199,.16), transparent 62%),
+    radial-gradient(300px 240px at 108% 72%, rgba(158,92,240,.12), transparent 60%);
+}
+/* 状态栏 */
+.statusbar {
+  height: 46px; flex: none; display: flex; align-items: flex-end; justify-content: space-between;
+  padding: 0 30px 6px; font-size: 14px; font-weight: 600; position: relative; z-index: 5;
+}
+.statusbar .notch { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); width: 106px; height: 28px; border-radius: 999px; background: #000; }
+
+/* ================= 导航栏 ================= */
+.navbar {
+  height: 44px; flex: none; display: flex; align-items: center; padding: 0 14px; position: relative; z-index: 5;
+  background: var(--glass-bar); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border-bottom: .5px solid var(--stroke-soft);
+}
+.nav-side { width: 72px; display: flex; align-items: center; gap: 4px; }
+.nav-side.r { justify-content: flex-end; }
+.nav-title { flex: 1; text-align: center; font-size: 15.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iconbtn { color: var(--accent); font-size: 19px; cursor: default; }
+
+/* 模式徽章 GlassBadge */
+.mode-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600; color: #fff;
+  background: linear-gradient(135deg, var(--teal), var(--indigo));
+  box-shadow: 0 3px 10px rgba(51,184,199,.3);
+}
+.mode-chip.deep { background: linear-gradient(135deg, var(--violet), var(--indigo)); box-shadow: 0 3px 10px rgba(158,92,240,.3); }
+.mode-chip .dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.9); }
+
+/* ================= 内容区 ================= */
+.content { flex: 1; overflow: hidden; position: relative; z-index: 2; display: flex; flex-direction: column; }
+.scroll { flex: 1; overflow: hidden; padding: 12px 14px 6px; display: flex; flex-direction: column; gap: 16px; }
+
+/* 空状态 */
+.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 0 30px; }
+.empty .biglogo {
+  width: 64px; height: 64px; border-radius: 20px;
+  background: linear-gradient(135deg, var(--teal), var(--indigo));
+  display: flex; align-items: center; justify-content: center; font-size: 27px; color: #fff;
+  box-shadow: 0 16px 34px rgba(97,87,230,.35);
+}
+.empty h2 { font-size: 21px; }
+.empty .hint { font-size: 12.5px; color: var(--text3); text-align: center; line-height: 1.6; }
+.suggests { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.sug {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px;
+  background: var(--glass); border: 1px solid var(--stroke);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+}
+.sug .ic {
+  width: 30px; height: 30px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+  background: rgba(89,199,219,.14); color: var(--accent); font-size: 14px;
+}
+.sug .tt { flex: 1; }
+.sug .tt b { display: block; font-size: 14px; font-weight: 500; }
+.sug .tt span { font-size: 11px; color: var(--text3); }
+.sug .chev { color: var(--text3); font-size: 11px; opacity: .6; }
+
+/* ================= 消息 ================= */
+.msg-user { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.bubble-user {
+  max-width: 78%; padding: 10px 14px; border-radius: 19px;
+  background: linear-gradient(135deg, var(--teal), var(--indigo));
+  color: #fff; font-size: 15px; line-height: 1.5;
+  box-shadow: 0 5px 16px rgba(51,184,199,.28);
+}
+.msg-ai { display: flex; flex-direction: column; gap: 6px; }
+.ai-head { display: flex; align-items: center; gap: 8px; }
+.ai-avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  background: linear-gradient(135deg, var(--teal), var(--indigo));
+  display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff;
+}
+.ai-head .name { font-size: 12px; font-weight: 600; color: var(--text2); }
+.ai-head .thinking { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text3); }
+.ai-head .thinking i { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.reasoning {
+  display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text3);
+  padding: 6px 10px; border-radius: 9px; background: var(--glass); border: 1px solid var(--stroke-soft); width: fit-content;
+}
+.ai-body { font-size: 14.5px; line-height: 1.65; color: var(--text); }
+.ai-body .cursor { display: inline-block; width: 2px; height: 15px; background: var(--accent); vertical-align: -2px; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.codeblock {
+  margin: 8px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--stroke-soft);
+  background: var(--code-bg);
+}
+.codeblock .cb-head {
+  display: flex; justify-content: space-between; align-items: center; padding: 7px 12px;
+  font-size: 10.5px; color: var(--text3); border-bottom: 1px solid var(--stroke-soft);
+  font-family: ui-monospace, Menlo, monospace;
+}
+.codeblock .cb-head .cb-actions { display: flex; gap: 10px; color: var(--text3); }
+.codeblock pre { padding: 11px 13px; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; line-height: 1.62; color: var(--text2); overflow: hidden; }
+.codeblock .kw { color: #c792ea; } .codeblock .str { color: #7ee2c0; } .codeblock .tag { color: #7ec7ff; } .codeblock .cm { color: var(--text3); }
+
+/* 工具调用 chip */
+.toolchip {
+  display: flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 10px; width: fit-content;
+  background: var(--tool-bg); border: 1px solid rgba(51,184,199,.25);
+  font-size: 11px; font-weight: 600; color: var(--text2);
+}
+.toolchip .ti { color: var(--teal); font-size: 10px; }
+.toolchip .path { font-family: ui-monospace, Menlo, monospace; color: var(--accent); font-weight: 400; }
+.toolchip.v { border-color: rgba(158,92,240,.3); background: rgba(158,92,240,.08); }
+.toolchip.v .ti { color: var(--violet); }
+
+/* 花费行 */
+.cost { display: flex; align-items: center; gap: 3px; font-size: 10px; color: var(--text3); }
+.cost .yo { font-size: 9px; }
+
+/* 操作栏 */
+.actionbar { display: flex; gap: 8px; margin-top: 2px; }
+.act {
+  display: flex; align-items: center; gap: 3px; padding: 5px 9px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--stroke-soft);
+  font-size: 11px; color: var(--text3);
+}
+
+/* ================= 输入栏 ================= */
+.inputzone { flex: none; position: relative; z-index: 5; padding-top: 6px; background: var(--glass-bar); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border-top: .5px solid var(--stroke-soft); }
+.disclaimer { text-align: center; font-size: 10px; color: var(--text3); opacity: .7; padding: 3px 0 8px; }
+.inputrow { display: flex; align-items: flex-end; gap: 10px; padding: 2px 12px 8px; }
+.plus {
+  width: 28px; height: 28px; border-radius: 50%; flex: none; font-size: 26px; line-height: 1;
+  color: var(--accent); background: transparent; display: flex; align-items: center; justify-content: center;
+}
+.textfield-wrap { flex: 1; position: relative; }
+.textfield {
+  min-height: 42px; border-radius: 20px; padding: 11px 14px;
+  background: var(--glass); border: 1px solid var(--stroke);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  font-size: 15px; color: var(--text); line-height: 1.45;
+  display: flex; align-items: center;
+}
+.textfield.with-wand { padding-right: 44px; }
+.textfield .ph { color: var(--text3); }
+/* 魔法棒（输入框右下角） */
+.wand {
+  position: absolute; right: 7px; bottom: 7px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--glass-strong); border: 1px solid var(--stroke);
+  display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--accent);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.sendbtn {
+  width: 34px; height: 34px; border-radius: 50%; flex: none;
+  background: linear-gradient(135deg, var(--teal), var(--indigo));
+  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 700;
+  box-shadow: 0 4px 12px rgba(51,184,199,.35);
+}
+.sendbtn.stop { background: var(--error); font-size: 11px; box-shadow: none; }
+.sendbtn.dim { background: var(--text3); opacity: .25; box-shadow: none; }
+
+/* 图片预览条 */
+.imgtray { display: flex; gap: 8px; padding: 0 16px 8px; }
+.imgtray .thumb {
+  width: 58px; height: 58px; border-radius: 12px; position: relative; flex: none;
+  background: linear-gradient(135deg, #2b416b, #1c2742); border: 1px solid var(--stroke);
+  display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 20px;
+}
+.imgtray .thumb .rm { position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; border-radius: 50%; background: #3a3f4d; color: #fff; font-size: 9px; display: flex; align-items: center; justify-content: center; }
+
+/* 优化状态条 */
+.optbar {
+  display: flex; align-items: center; gap: 8px; margin: 0 12px 6px; padding: 7px 12px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--stroke);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  font-size: 12px; color: var(--text2);
+}
+.optbar .sp { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--stroke); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.optbar .ok-ic { color: var(--accent); font-size: 11px; }
+.optbar .err-ic { color: var(--error); font-size: 11px; }
+.optbar .sp2 { flex: 1; }
+.optbar .undo { color: var(--accent); font-weight: 600; font-size: 12px; }
+.optbar .x { color: var(--text3); font-size: 10px; }
+
+/* 未配置横幅 */
+.config-banner {
+  flex: none; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 9px 0; font-size: 13px; font-weight: 500; color: var(--error);
+  background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: .5px solid var(--stroke-soft); position: relative; z-index: 4;
+}
+
+/* ================= TabBar ================= */
+.tabbar {
+  height: 72px; flex: none; position: relative; z-index: 6;
+  background: var(--glass-bar); backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px);
+  border-top: .5px solid var(--stroke-soft);
+  display: flex; align-items: flex-start; justify-content: space-around; padding-top: 9px;
+}
+.tab { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; color: var(--text3); width: 76px; }
+.tab .ti2 { font-size: 21px; }
+.tab.on { color: var(--accent); }
+.homebar { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); width: 130px; height: 4.5px; border-radius: 999px; background: var(--text3); opacity: .6; }
+
+/* ================= 抽屉 / 弹层 ================= */
+.sheet-dim { position: absolute; inset: 0; background: rgba(0,0,0,.42); z-index: 8; }
+.sheet {
+  position: absolute; left: 0; top: 56px; bottom: 0; width: 318px; z-index: 9;
+  background: var(--bg-soft); border-right: 1px solid var(--stroke-soft);
+  border-radius: 0 28px 28px 0; overflow: hidden; display: flex; flex-direction: column;
+  box-shadow: 14px 0 44px rgba(0,0,0,.4);
+}
+.sheet-nav {
+  height: 46px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
+  background: var(--glass-bar); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  font-size: 15.5px; font-weight: 600; border-bottom: .5px solid var(--stroke-soft);
+}
+.sheet-nav .done { color: var(--accent); font-size: 14px; }
+.sheet-list { flex: 1; padding: 12px; overflow: hidden; display: flex; flex-direction: column; gap: 14px; }
+.sgroup { border-radius: 14px; overflow: hidden; background: var(--glass); border: 1px solid var(--stroke-soft); }
+.srow { display: flex; align-items: center; gap: 10px; padding: 11.5px 13px; border-bottom: .5px solid var(--stroke-soft); }
+.srow:last-child { border-bottom: none; }
+.srow .sicon { font-size: 14px; width: 22px; text-align: center; }
+.srow .smain { flex: 1; min-width: 0; }
+.srow .smain b { display: block; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow .smain span { font-size: 11px; color: var(--text3); }
+.now-badge { font-size: 10.5px; font-weight: 600; color: #fff; padding: 3px 9px; border-radius: 999px; background: linear-gradient(135deg, var(--teal), var(--indigo)); }
+.sheet-h { font-size: 12px; color: var(--text3); padding: 0 4px 5px; }
+
+/* ================= 列表页（文件 / 设置） ================= */
+.listpage { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 12px; gap: 20px; }
+.lgroup { border-radius: 14px; background: var(--glass); border: 1px solid var(--stroke-soft); overflow: hidden; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+.lhead { font-size: 12px; color: var(--text3); padding: 0 14px 6px; }
+.lfoot { font-size: 11px; color: var(--text3); line-height: 1.6; padding: 8px 14px 4px; }
+.lrow { display: flex; align-items: center; gap: 11px; padding: 12px 14px; border-bottom: .5px solid var(--stroke-soft); }
+.lrow:last-child { border-bottom: none; }
+.lrow .licon { width: 24px; text-align: center; font-size: 16px; }
+.lrow .lmain { flex: 1; min-width: 0; }
+.lrow .lmain b { display: block; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .lmain span { font-size: 10.5px; color: var(--text3); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .mono { font-family: ui-monospace, Menlo, monospace; }
+.lrow .rtext { font-size: 13px; color: var(--text3); }
+.lrow .chev { color: var(--text3); font-size: 12px; }
+.check { color: var(--accent); font-size: 17px; }
+.mini-badge { font-size: 10.5px; font-weight: 600; color: #fff; padding: 3px 9px; border-radius: 999px; background: linear-gradient(135deg, var(--teal), var(--indigo)); }
+.toggle { width: 48px; height: 29px; border-radius: 999px; background: var(--text3); opacity: .4; position: relative; flex: none; }
+.toggle.on { background: linear-gradient(135deg, #34c759, #28b457); opacity: 1; box-shadow: 0 2px 8px rgba(52,199,89,.4); }
+.toggle .knob { position: absolute; top: 2.5px; right: 2.5px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,.25); }
+.toggle:not(.on) .knob { right: auto; left: 2.5px; }
+.savekey { color: var(--accent); font-size: 13px; font-weight: 600; }
+.pricetag { display: flex; align-items: center; gap: 6px; }
+.pricetag input { width: 72px; text-align: right; font-family: ui-monospace, Menlo, monospace; font-size: 14px; color: var(--text2); background: none; border: none; outline: none; }
+.pricetag .unit { font-size: 11px; color: var(--text3); }
+.eye { font-size: 11px; color: var(--teal); }
+.eye.no { color: var(--text3); }
+.eyenote { font-size: 11px; color: var(--text3); }
+
+/* 模型选择弹层（sheet 从底部） */
+.msheet {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 68%; z-index: 9;
+  background: var(--bg-soft); border-radius: 26px 26px 0 0; border-top: 1px solid var(--stroke);
+  display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 -14px 44px rgba(0,0,0,.45);
+}
+.grab { width: 38px; height: 4.5px; border-radius: 999px; background: var(--text3); opacity: .5; margin: 8px auto 2px; flex: none; }
+.msearch { margin: 8px 14px 10px; padding: 8px 12px; border-radius: 11px; background: var(--glass); border: 1px solid var(--stroke-soft); font-size: 13.5px; color: var(--text3); display: flex; align-items: center; gap: 7px; flex: none; }
+.mlist { flex: 1; padding: 0 12px 14px; overflow: hidden; }
+.mrow { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 13px; background: var(--glass); border: 1px solid var(--stroke-soft); margin-bottom: 8px; }
+.mrow .mmain { flex: 1; }
+.mrow .mmain b { display: block; font-size: 12.5px; font-family: ui-monospace, Menlo, monospace; font-weight: 500; }
+.mrow .mmain span { font-size: 10px; color: var(--teal); font-weight: 500; }
+
+/* 文件编辑器 */
+.editorbar { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; font-size: 10px; font-family: ui-monospace, Menlo, monospace; color: var(--text3); background: var(--glass-bar); border-top: .5px solid var(--stroke-soft); position: relative; z-index: 5; }
+.editorbar .askai { color: var(--violet); font-size: 12px; font-weight: 500; font-family: -apple-system, "PingFang SC", sans-serif; }
+.codeedit { flex: 1; padding: 12px 14px; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; line-height: 1.7; color: var(--text2); overflow: hidden; }
+.codeedit .ln { color: var(--text3); opacity: .55; display: inline-block; width: 22px; user-select: none; }
+
+/* toast */
+.toast {
+  position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 20;
+  padding: 9px 16px; border-radius: 999px; font-size: 12.5px; color: #fff;
+  background: rgba(20,24,44,.86); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--stroke);
+}
+
+@media (max-width: 480px) {
+  .page { padding: 18px 8px 40px; }
+  .phone { transform: scale(.88); transform-origin: top center; margin-bottom: -80px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ============ 页头 ============ -->
+  <div class="pagehead">
+    <div class="brandrow">
+      <div class="logo">✦</div>
+      <div>
+        <h1>Nexus <span style="font-size:16px;color:var(--text3);font-weight:400">璇玑</span></h1>
+        <div class="sub">iOS AI 编程与对话助手 · 界面复刻稿（App 实机为液态玻璃材质）</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="toggle-btn" onclick="toggleTheme()" id="themeBtn">☀️ 切换浅色</button>
+    </div>
+  </div>
+
+  <div class="legend">
+    App 共 <b>2 种对话模式</b>：<span class="pill">⚡ 快速模式</span> 极简上下文、日常问答，Token 消耗最低；<span class="pill">🧠 深度模式</span> 完整上下文 + 文件读写工具（Agent），可写 HTML 小程序。
+    底部 Tab 三页：<b>对话 · 文件 · 设置</b>。以下为全部界面复刻（共 8 屏），右上按钮可切换深 / 浅色。
+  </div>
+
+  <div class="board">
+
+  <!-- ============ ① 快速模式 · 空状态 ============ -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:41</span><span>􀙇 􀛨</span><div class="notch"></div></div>
+      <div class="navbar">
+        <div class="nav-side"><span class="iconbtn">☰</span></div>
+        <div class="nav-title">新对话</div>
+        <div class="nav-side r"><span class="mode-chip"><span class="dot"></span>快速模式</span></div>
+      </div>
+      <div class="content"><div class="empty">
+        <div class="biglogo">✦</div>
+        <h2>Nexus</h2>
+        <div class="hint">快速模式 · 极简上下文，日常闲聊花费最低</div>
+        <div class="suggests">
+          <div class="sug"><div class="ic">💡</div><div class="tt"><b>今天适合做什么？</b><span>随手一问，快速回答</span></div><div class="chev">›</div></div>
+          <div class="sug"><div class="ic">🈶</div><div class="tt"><b>帮我润色一句话</b><span>快速改写文本</span></div><div class="chev">›</div></div>
+          <div class="sug"><div class="ic">☰</div><div class="tt"><b>列个周末计划</b><span>简洁要点式输出</span></div><div class="chev">›</div></div>
+        </div>
+      </div></div>
+      <div class="inputzone">
+        <div class="inputrow">
+          <div class="plus">＋</div>
+          <div class="textfield-wrap"><div class="textfield"><span class="ph">有问题，尽管问</span></div></div>
+          <div class="sendbtn dim">↑</div>
+        </div>
+        <div class="disclaimer">内容由 AI 生成，请注意甄别</div>
+      </div>
+      <div class="tabbar">
+        <div class="tab on"><span class="ti2">💬</span>对话</div>
+        <div class="tab"><span class="ti2">📁</span>文件</div>
+        <div class="tab"><span class="ti2">⚙️</span>设置</div>
+        <div class="homebar"></div>
+      </div>
+    </div></div>
+    <div class="caption"><span class="no">1</span>快速模式 · 空状态（建议卡片）</div>
+  </div>
+
+  <!-- ============ ② 快速模式 · 对话中 ============ -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:41</span><span>􀙇 􀛨</span><div class="notch"></div></div>
+      <div class="navbar">
+        <div class="nav-side"><span class="iconbtn">☰</span></div>
+        <div class="nav-title">帮我润色一句话</div>
+        <div class="nav-side r"><span class="mode-chip"><span class="dot"></span>快速模式</span></div>
+      </div>
+      <div class="content"><div class="scroll">
+        <div class="msg-user"><div class="bubble-user">帮我把"这个方案挺好的"润色得更正式一点，用在邮件里</div></div>
+        <div class="msg-ai">
+          <div class="ai-head">
+            <div class="ai-avatar">✦</div><span class="name">Nexus</span>
+            <span class="thinking"><i></i>思考中</span>
+          </div>
+          <div class="ai-body">该方案整体可行，各方面考虑较为周全<span class="cursor"></span></div>
+        </div>
+        <div class="msg-user"><div class="bubble-user">再简短一点</div></div>
+        <div class="msg-ai">
+          <div class="ai-head"><div class="ai-avatar">✦</div><span class="name">Nexus</span></div>
+          <div class="ai-body">方案可行，考虑周全。</div>
+          <div class="cost"><span class="yo">◎</span>本次 ¥0.0021</div>
+          <div class="actionbar">
+            <div class="act">📋 复制</div><div class="act">🖍 选字</div><div class="act">↻ 重答</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="inputzone">
+        <div class="imgtray">
+          <div class="thumb">🖼<span class="rm">✕</span></div>
+        </div>
+        <div class="inputrow">
+          <div class="plus">＋</div>
+          <div class="textfield-wrap"><div class="textfield"><span class="ph">生成中…</span></div></div>
+          <div class="sendbtn stop">■</div>
+        </div>
+        <div class="disclaimer">内容由 AI 生成，请注意甄别</div>
+      </div>
+      <div class="tabbar">
+        <div class="tab on"><span class="ti2">💬</span>对话</div>
+        <div class="tab"><span class="ti2">📁</span>文件</div>
+        <div class="tab"><span class="ti2">⚙️</span>设置</div>
+        <div class="homebar"></div>
+      </div>
+    </div></div>
+    <div class="caption"><span class="no">2</span>快速模式 · 流式回复 + 本次花费（¥）+ 识图附件</div>
+  </div>
+
+  <!-- ============ ③ 深度模式 · 工具调用 ============ -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:41</span><span>􀙇 􀛨</span><div class="notch"></div></div>
+      <div class="navbar">
+        <div class="nav-side"><span class="iconbtn">☰</span></div>
+        <div class="nav-title">写一个个人主页</div>
+        <div class="nav-side r"><span class="mode-chip deep"><span class="dot"></span>深度模式</span></div>
+      </div>
+      <div class="content"><div class="scroll">
+        <div class="msg-user"><div class="bubble-user">帮我写一个个人主页 index.html，现代深色风格</div></div>
+        <div class="msg-ai">
+          <div class="ai-head">
+            <div class="ai-avatar">✦</div><span class="name">Nexus</span>
+            <span class="thinking"><i></i>思考中</span>
+          </div>
+          <div class="reasoning">🧠 思考过程 ▾</div>
+        </div>
+        <div class="msg-ai">
+          <div class="ai-head"><div class="ai-avatar">✦</div><span class="name">Nexus</span></div>
+          <div class="toolchip v"><span class="ti">🔧</span>写入文件<span class="path">index.html</span></div>
+          <div class="toolchip"><span class="ti">🔧</span>读取文件<span class="path">style.css</span></div>
+          <div class="ai-body">已为你创建 <b>index.html</b>，要点：</div>
+          <div class="codeblock">
+            <div class="cb-head"><span>html</span><span class="cb-actions"><span>复制</span><span>预览</span></span></div>
+            <pre><span class="tag">&lt;section</span> <span class="kw">class</span>=<span class="str">"hero"</span><span class="tag">&gt;</span>
+  <span class="tag">&lt;h1&gt;</span>你好，我是璇玑<span class="tag">&lt;/h1&gt;</span>
+<span class="tag">&lt;/section&gt;</span></pre>
+          </div>
+          <div class="cost"><span class="yo">◎</span>本次 ¥0.0183</div>
+          <div class="actionbar">
+            <div class="act">📋 复制</div><div class="act">🖍 选字</div><div class="act">↻ 重答</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="inputzone">
+        <div class="inputrow">
+          <div class="plus">＋</div>
+          <div class="textfield-wrap"><div class="textfield"><span class="ph">生成中…</span></div></div>
+          <div class="sendbtn stop">■</div>
+        </div>
+        <div class="disclaimer">内容由 AI 生成，请注意甄别</div>
+      </div>
+      <div class="tabbar">
+        <div class="tab on"><span class="ti2">💬</span>对话</div>
+        <div class="tab"><span class="ti2">📁</span>文件</div>
+        <div class="tab"><span class="ti2">⚙️</span>设置</div>
+        <div class="homebar"></div>
+      </div>
+    </div></div>
+    <div class="caption"><span class="no">3</span>深度模式 · 思考链折叠 + 文件工具调用 + 代码块</div>
+  </div>
+
+  <!-- ============ ④ 提示词优化 ============ -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:41</span><span>􀙇 􀛨</span><div class="notch"></div></div>
+      <div class="navbar">
+        <div class="nav-side"><span class="iconbtn">☰</span></div>
+        <div class="nav-title">新对话</div>
+        <div class="nav-side r"><span class="mode-chip"><span class="dot"></span>快速模式</span></div>
+      </div>
+      <div class="content"><div class="empty">
+        <div class="biglogo">✦</div>
+        <h2>Nexus</h2>
+        <div class="hint">快速模式 · 极简上下文，日常闲聊花费最低</div>
+      </div></div>
+      <div class="inputzone">
+        <div class="optbar">
+          <span class="ok-ic">🪄</span>已优化提示词
+          <span class="sp2"></span>
+          <span class="undo">撤销</span><span class="x">✕</span>
+        </div>
+        <div class="inputrow">
+          <div class="plus">＋</div>
+          <div class="textfield-wrap">
+            <div class="textfield with-wand">请以专业客服的口吻，把这句话润色成一封 100 字以内的道歉邮件，语气诚恳并说明解决方案</div>
+            <div class="wand">🪄</div>
+          </div>
+          <div class="sendbtn">↑</div>
+        </div>
+        <div class="disclaimer">内容由 AI 生成，请注意甄别</div>
+      </div>
+      <div class="tabbar">
+        <div class="tab on"><span class="ti2">💬</span>对话</div>
+        <div class="tab"><span class="ti2">📁</span>文件</div>
+        <div class="tab"><span class="ti2">⚙️</span>设置</div>
+        <div class="homebar"></div>
+      </div>
+    </div></div>
+    <div class="caption"><span class="no">4</span>提示词优化 · 输入框右下魔法棒 + 可撤销</div>
+  </div>
+
+  <!-- ============ ⑤ 提示词优化中 ============ -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:41</span><span>􀙇 􀛨</span><div class="notch"></div></div>
+      <div class="navbar">
+        <div class="nav-side"><span class="iconbtn">☰</span></div>
+        <div class="nav-title">新对话</div>
+        <div class="nav-side r"><span class="mode-chip"><span class="dot"></span>快速模式</span></div>
+      </div>
+      <div class="content"><div class="empty">
+        <div class="biglogo">✦</div>
+        <h2>Nexus</h2>
+        <div class="hint">快速模式 · 极简上下文，日常闲聊花费最低</div>
+      </div></div>
+      <div class="inputzone">
+        <div class="optbar">
+          <span class="sp"></span>正在优化提示词…
+        </div>
+        <div class="inputrow">
+          <div class="plus">＋</div>
+          <div class="textfield-wrap">
+            <div class="textfield with-wand" style="color:var(--text3)">润色一下这句话…</div>
+            <div class="wand" style="border-color:var(--accent);color:var(--accent)">◌</div>
+          </div>
+          <div class="sendbtn">↑</div>
+        </div>
+        <div class="disclaimer">内容由 AI 生成，请注意甄别</div>
+      </div>
+      <div class="toast">🪄 已复制优化结果</div>
+      <div class="tabbar">
+        <div class="tab on"><span class="ti2">💬</span>对话</div>
+        <div class="tab"><span class="ti2">📁</span>文件</div>
+        <div class="tab"><span class="ti2">⚙️</span>设置</div>
+        <div class="homebar"></div>
+      </div>
+    </div></div>
+    <div class="caption"><span class="no">5</span>提示词优化 · 进行中（按钮变加载态）</div>
+  </div>
+
+  <!-- ============ ⑥ 会话列表抽屉 ============ -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:41</span><span>􀙇 􀛨</span><div class="notch"></div></div>
+      <div class="sheet-dim"></div>
+      <div class="sheet">
+        <div class="sheet-nav"><span>对话</span><span class="done">完成</span></div>
+        <div class="sheet-list">
+          <div>
+            <div class="sheet-h">新建</div>
+            <div class="sgroup">
+              <div class="srow"><span class="sicon" style="color:var(--teal)">⚡</span><span class="smain"><b>新建对话 · 快速模式</b></span></div>
+              <div class="srow"><span class="sicon" style="color:var(--violet)">🧠</span><span class="smain"><b>新建对话 · 深度模式</b></span></div>
+            </div>
+          </div>
+          <div>
+            <div class="sheet-h">历史会话</div>
+            <div class="sgroup">
+              <div class="srow"><span class="sicon" style="color:var(--violet)">🧠</span><span class="smain"><b>写一个个人主页</b><span>8 条消息 · 3 分钟前</span></span><span class="now-badge">当前</span></div>
+              <div class="srow"><span class="sicon" style="color:var(--teal)">⚡</span><span class="smain"><b>帮我润色一句话</b><span>4 条消息 · 1 小时前</span></span></div>
+              <div class="srow"><span class="sicon" style="color:var(--teal)">⚡</span><span class="smain"><b>列个周末计划</b><span>2 条消息 · 昨天</span></span></div>
+              <div class="srow"><span class="sicon" style="color:var(--violet)">🧠</span><span class="smain"><b>读一下工作区文件</b><span>12 条消息 · 昨天</span></span></div>
+              <div class="srow"><span class="sicon" style="color:var(--teal)">⚡</span><span class="smain"><b>今天适合做什么？</b><span>2 条消息 · 2 天前</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span class="no">6</span>会话列表抽屉（左上 ☰ 唤起，可左滑删除）</div>
+  </div>
+
+  <!-- ============ ⑦ 文件 Tab ============ -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:41</span><span>􀙇 􀛨</span><div class="notch"></div></div>
+      <div class="navbar">
+        <div class="nav-side"></div>
+        <div class="nav-title">工作区</div>
+        <div class="nav-side r"><span class="iconbtn">＋</span></div>
+      </div>
+      <div class="listpage">
+        <div>
+          <div class="lhead">我的 iPhone / Nexus</div>
+          <div class="lgroup">
+            <div class="lrow"><span class="licon" style="color:var(--indigo)">📁</span><span class="lmain"><b>assets</b><span>3 个项目</span></span><span class="chev">›</span></div>
+            <div class="lrow"><span class="licon" style="color:var(--teal)">🌐</span><span class="lmain"><b>index.html</b><span>4.2 KB</span></span><span class="mini-badge">编辑</span></div>
+            <div class="lrow"><span class="licon" style="color:var(--teal)">🎨</span><span class="lmain"><b>style.css</b><span>1.8 KB</span></span><span class="chev">›</span></div>
+            <div class="lrow"><span class="licon" style="color:var(--teal)">{ }</span><span class="lmain"><b>app.js</b><span>2.6 KB</span></span><span class="chev">›</span></div>
+            <div class="lrow"><span class="licon" style="color:var(--teal)">📄</span><span class="lmain"><b>README.md</b><span>312 字节</span></span><span class="chev">›</span></div>
+            <div class="lrow"><span class="licon" style="color:var(--teal)">🖼</span><span class="lmain"><b>avatar.png</b><span>86 KB</span></span><span class="chev">›</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="lhead">编辑器（点文件进入）</div>
+          <div class="lgroup">
+            <div class="lrow"><span class="licon" style="color:var(--teal)">🌐</span><span class="lmain"><b class="mono">index.html</b></span><span class="rtext">12 行 · 4.2 KB</span></div>
+            <div class="lrow"><span class="licon" style="color:var(--violet)">🪄</span><span class="lmain"><b>让 AI 编辑此文件</b><span>保存后可 ▶ 预览 HTML</span></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><span class="ti2">💬</span>对话</div>
+        <div class="tab on"><span class="ti2">📁</span>文件</div>
+        <div class="tab"><span class="ti2">⚙️</span>设置</div>
+        <div class="homebar"></div>
+      </div>
+    </div></div>
+    <div class="caption"><span class="no">7</span>文件 · 工作区浏览（+ 新建/导入，左滑删/改名/问 AI）</div>
+  </div>
+
+  <!-- ============ ⑧ 设置 Tab + 模型弹层 ============ -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>9:41</span><span>􀙇 􀛨</span><div class="notch"></div></div>
+      <div class="navbar">
+        <div class="nav-side"></div>
+        <div class="nav-title">设置</div>
+        <div class="nav-side r"></div>
+      </div>
+      <div class="sheet-dim" style="background:rgba(0,0,0,.30)"></div>
+      <div class="listpage" style="padding-top:8px">
+        <div>
+          <div class="lhead">服务商</div>
+          <div class="lgroup">
+            <div class="lrow"><span class="lmain"><b>DeepSeek</b><span class="mono">https://api.deepseek.com/v1</span></span><span class="check">✓</span></div>
+            <div class="lrow"><span class="lmain"><b>OpenAI</b><span class="mono">https://api.openai.com/v1</span></span></div>
+            <div class="lrow"><span class="lmain"><b>Kimi (月之暗面)</b><span class="mono">https://api.moonshot.cn/v1</span></span></div>
+            <div class="lrow"><span class="lmain"><b>智谱 GLM</b><span class="mono">open.bigmodel.cn/api/paas/v4</span></span></div>
+            <div class="lrow"><span class="lmain"><b>硅基流动</b><span class="mono">https://api.siliconflow.cn/v1</span></span></div>
+            <div class="lrow"><span class="lmain"><b>Ollama 本地</b><span class="mono">http://127.0.0.1:11434/v1</span></span></div>
+            <div class="lrow"><span class="lmain"><b>自定义</b><span>填写 Base URL</span></span></div>
+          </div>
+        </div>
+        <div>
+          <div class="lhead">API Key（存于 Keychain）</div>
+          <div class="lgroup">
+            <div class="lrow"><span class="lmain mono" style="font-size:14px">sk-••••••••••••••••3f9a</span><span class="savekey">保存</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="lhead">模型</div>
+          <div class="lgroup">
+            <div class="lrow"><span class="lmain"><b class="mono">deepseek-chat</b><span>已识别 6 个模型</span></span><span class="chev">›</span></div>
+            <div class="lrow"><span class="lmain"><b class="eye">👁</b><span class="eyenote">该模型可能不支持图片识别，识图请选择多模态模型</span></span></div>
+            <div class="lrow"><span class="lmain" style="color:var(--accent);font-size:13.5px;font-weight:500">↻ 重新识别模型列表</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="lhead">费用估算</div>
+          <div class="lgroup">
+            <div class="lrow"><span class="lmain"><b>显示本次花费</b></span><span class="toggle on"><span class="knob"></span></span></div>
+            <div class="lrow"><span class="lmain"><b>输入单价</b></span><span class="pricetag"><input value="2" readonly><span class="unit">元/百万</span></span></div>
+            <div class="lrow"><span class="lmain"><b>输出单价</b></span><span class="pricetag"><input value="8" readonly><span class="unit">元/百万</span></span></div>
+            <div class="lrow"><span class="lmain" style="color:var(--accent);font-size:13px">↺ 恢复当前模型建议单价</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="lhead">提示词优化</div>
+          <div class="lgroup">
+            <div class="lrow"><span class="lmain"><b>启用提示词优化</b></span><span class="toggle on"><span class="knob"></span></span></div>
+            <div class="lfoot">开启后，输入框右下角出现魔法棒按钮，一键把草稿改写成更清晰、具体的提示词，可随时撤销。</div>
+          </div>
+        </div>
+        <div>
+          <div class="lhead">关于</div>
+          <div class="lgroup">
+            <div class="lrow"><span class="lmain" style="color:var(--text2)">版本</span><span class="rtext">1.0.0</span></div>
+            <div class="lrow"><span class="lmain" style="color:var(--text2)">工作区</span><span class="rtext">文件 App → 我的 iPhone → Nexus</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="msheet">
+        <div class="grab"></div>
+        <div class="msearch">🔍 搜索模型</div>
+        <div class="mlist">
+          <div style="font-size:12px;color:var(--text3);padding:0 4px 8px">识别到 6 个模型</div>
+          <div class="mrow"><span class="mmain"><b>deepseek-chat</b></span><span class="check" style="font-size:15px">✓</span></div>
+          <div class="mrow"><span class="mmain"><b>deepseek-reasoner</b></span></div>
+          <div class="mrow"><span class="mmain"><b>deepseek-v3</b></span></div>
+          <div class="mrow"><span class="mmain"><b>deepseek-coder-v2</b></span></div>
+        </div>
+      </div>
+      <div class="tabbar" style="z-index:4">
+        <div class="tab"><span class="ti2">💬</span>对话</div>
+        <div class="tab"><span class="ti2">📁</span>文件</div>
+        <div class="tab on"><span class="ti2">⚙️</span>设置</div>
+        <div class="homebar"></div>
+      </div>
+    </div></div>
+    <div class="caption"><span class="no">8</span>设置 · 服务商/密钥/模型/费用估算/提示词优化 + 模型选择弹层</div>
+  </div>
+
+  </div>
+
+  <div class="legend" style="margin-top:30px">
+    说明：本页为静态复刻稿，演示布局、层级与深浅色适配；实际 App 中导航栏、输入栏、Tab 栏均为 iOS 26 液态玻璃（ultraThinMaterial / glassEffect）材质，随背景实时弥散。图中 ✓ = 当前选中，撤销 = 还原优化前的原文。
+  </div>
+</div>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  document.getElementById('themeBtn').textContent = next === 'dark' ? '☀️ 切换浅色' : '🌙 切换深色';
+}
+</script>
+</body>
+</html>

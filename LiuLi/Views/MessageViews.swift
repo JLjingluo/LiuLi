@@ -12,6 +12,7 @@ struct MessageBubble: View {
     var isLatestAssistant = false
     var onRegenerate: (() -> Void)? = nil
 
+    @EnvironmentObject private var settings: AppSettings
     @State private var showTextSelector = false
 
     var body: some View {
@@ -161,11 +162,19 @@ struct MessageBubble: View {
                     .foregroundStyle(Color.errorText)
             }
 
-            // Token 用量（轻量显示）
+            // 本次花费（按设置页单价估算）
             if let usage = message.usage {
-                Text("↑\(usage.promptTokens) ↓\(usage.completionTokens) tokens")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color.textTertiary)
+                let cost = usage.costYuan(
+                    inputPerM: settings.inputPricePerM,
+                    outputPerM: settings.outputPricePerM
+                )
+                HStack(spacing: 3) {
+                    Image(systemName: "yensign.circle")
+                        .font(.system(size: 9))
+                    Text("本次 \(UsageInfo.costText(cost))")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundStyle(Color.textTertiary)
             }
 
             // 操作栏（豆包式：复制 / 重新生成，流式完成后显示）

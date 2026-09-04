@@ -17,14 +17,14 @@ struct ConversationListView: View {
                         store.create(mode: .lite)
                         dismiss()
                     } label: {
-                        Label("新建省流对话", systemImage: "bolt.fill")
+                        Label("新建对话 · 快速模式", systemImage: "bolt.fill")
                             .foregroundStyle(Color.liuliTeal)
                     }
                     Button {
                         store.create(mode: .deep)
                         dismiss()
                     } label: {
-                        Label("新建深度对话", systemImage: "brain.filled.head.profile")
+                        Label("新建对话 · 深度模式", systemImage: "brain.filled.head.profile")
                             .foregroundStyle(Color.liuliViolet)
                     }
                 }

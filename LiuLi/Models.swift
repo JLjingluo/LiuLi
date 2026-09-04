@@ -2,15 +2,15 @@ import Foundation
 
 // MARK: - 聊天数据模型（纯逻辑层，App 与测试共用）
 
-/// 对话模式：省流（低 Token）/ 深度（全量 + 文件工具）
+/// 对话模式：快速（低 Token）/ 深度（全量 + 文件工具）
 enum ChatMode: String, Codable {
     case lite
     case deep
 
     var displayName: String {
         switch self {
-        case .lite: return "省流"
-        case .deep: return "深度"
+        case .lite: return "快速模式"
+        case .deep: return "深度模式"
         }
     }
 }
@@ -26,6 +26,23 @@ struct ToolCallInfo: Codable, Equatable, Identifiable {
 struct UsageInfo: Codable, Equatable {
     var promptTokens: Int
     var completionTokens: Int
+
+    /// 按元/百万 tokens 单价估算本次花费（元）
+    func costYuan(inputPerM: Double, outputPerM: Double) -> Double {
+        (Double(promptTokens) * inputPerM + Double(completionTokens) * outputPerM) / 1_000_000
+    }
+
+    /// 费用展示文本：智能精度 + 去尾零（¥0.0123 / ¥1.05 / 免费）
+    static func costText(_ yuan: Double) -> String {
+        if yuan <= 0 { return "¥0" }
+        var text: String
+        if yuan >= 1 { text = String(format: "%.2f", yuan) }
+        else if yuan >= 0.01 { text = String(format: "%.4f", yuan) }
+        else { text = String(format: "%.6f", yuan) }
+        while text.hasSuffix("0") { text.removeLast() }
+        if text.hasSuffix(".") { text.removeLast() }
+        return "¥\(text)"
+    }
 }
 
 /// 消息角色：user / assistant / tool 参与协议；note 仅本地展示

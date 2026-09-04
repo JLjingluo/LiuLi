@@ -19,6 +19,7 @@ struct ChatView: View {
     @State private var stashedItems: [PhotosPickerItem] = []
     @State private var showVisionAlert = false
     @State private var forceVisionBypass = false
+    @State private var optimizeError: String?
     @FocusState private var inputFocused: Bool
 
     /// 建议提问（豆包式空状态卡片，按当前模式给出）
@@ -30,7 +31,7 @@ struct ChatView: View {
             SuggestionItem(icon: "hammer", title: "写一个计算器", subtitle: "HTML+CSS+JS 小程序"),
         ]
         : [
-            SuggestionItem(icon: "lightbulb", title: "今天适合做什么？", subtitle: "随手一问，省流回答"),
+            SuggestionItem(icon: "lightbulb", title: "今天适合做什么？", subtitle: "随手一问，快速回答"),
             SuggestionItem(icon: "translate", title: "帮我润色一句话", subtitle: "快速改写文本"),
             SuggestionItem(icon: "list.bullet", title: "列个周末计划", subtitle: "简洁要点式输出"),
         ]
@@ -215,7 +216,7 @@ struct ChatView: View {
         case .deep:
             return "深度模式 · 完整上下文，AI 可读写文件并编写小程序"
         default:
-            return "省流模式 · 极简上下文，日常闲聊 Token 消耗最低"
+            return "快速模式 · 极简上下文，日常闲聊花费最低"
         }
     }
 
@@ -233,7 +234,7 @@ struct ChatView: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            // 模式切换（省流/深度）
+            // 模式切换（快速/深度，对标 DeepSeek）
             Button {
                 if var conv = store.current, !vm.isStreaming {
                     conv.mode = conv.mode == .lite ? .deep : .lite
@@ -241,7 +242,7 @@ struct ChatView: View {
                 }
             } label: {
                 GlassBadge(
-                    text: store.current?.mode == .deep ? "深度" : "省流",
+                    text: (store.current?.mode ?? .lite).displayName,
                     tint: store.current?.mode == .deep ? Color.liuliViolet : Color.liuliTeal
                 )
             }
@@ -252,6 +253,12 @@ struct ChatView: View {
 
     private var inputBar: some View {
         VStack(spacing: 6) {
+            // 提示词优化状态条（优化中 / 已优化可撤销 / 失败提示）
+            if settings.promptOptimizerEnabled,
+               vm.isOptimizing || vm.undoableOptimizedText != nil || optimizeError != nil {
+                optimizeStatusBar
+            }
+
             // 待发送图片预览
             if !vm.pendingImages.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -301,24 +308,31 @@ struct ChatView: View {
                 }
                 .disabled(vm.isStreaming)
 
-                // 输入框
-                TextField(vm.isStreaming ? "生成中…" : "有问题，尽管问", text: $inputText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...5)
-                    .focused($inputFocused)
-                    .font(.system(size: 15.5))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .strokeBorder(Color.glassStroke, lineWidth: 1)
-                    )
-                    .submitLabel(.send)
-                    .onSubmit { performSend() }
+                // 输入框（右下角：提示词优化魔法棒）
+                ZStack(alignment: .bottomTrailing) {
+                    TextField(vm.isStreaming ? "生成中…" : "有问题，尽管问", text: $inputText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...5)
+                        .focused($inputFocused)
+                        .font(.system(size: 15.5))
+                        .padding(.leading, 14)
+                        .padding(.trailing, showOptimizeButton ? 42 : 14)
+                        .padding(.vertical, 11)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .strokeBorder(Color.glassStroke, lineWidth: 1)
+                        )
+                        .submitLabel(.send)
+                        .onSubmit { performSend() }
+
+                    if showOptimizeButton {
+                        optimizeButton
+                    }
+                }
 
                 // 发送 / 停止
                 sendButton
@@ -352,6 +366,100 @@ struct ChatView: View {
             }
         } message: {
             Text(vm.visionWarning ?? "")
+        }
+    }
+
+    // MARK: 提示词优化（输入框右下角魔法棒）
+
+    private var showOptimizeButton: Bool {
+        settings.promptOptimizerEnabled && !vm.isStreaming &&
+        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    @ViewBuilder
+    private var optimizeButton: some View {
+        Button {
+            performOptimize()
+        } label: {
+            Group {
+                if vm.isOptimizing {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.liuliAccent)
+                }
+            }
+            .frame(width: 26, height: 26)
+            .background(Circle().fill(.ultraThinMaterial))
+            .overlay(Circle().strokeBorder(Color.glassStroke, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(vm.isOptimizing)
+        .padding(.trailing, 7)
+        .padding(.bottom, 7)
+    }
+
+    private var optimizeStatusBar: some View {
+        HStack(spacing: 8) {
+            if vm.isOptimizing {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在优化提示词…")
+            } else if let err = optimizeError {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.errorText)
+                Text(err)
+                    .lineLimit(1)
+            } else {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.liuliAccent)
+                Text("已优化提示词")
+            }
+            Spacer(minLength: 4)
+            if !vm.isOptimizing {
+                if vm.undoableOptimizedText != nil {
+                    Button("撤销") {
+                        vm.undoOptimize()
+                        inputText = vm.draft
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.liuliAccent)
+                }
+                Button {
+                    optimizeError = nil
+                    vm.undoableOptimizedText = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.textTertiary)
+                }
+            }
+        }
+        .font(.system(size: 12))
+        .foregroundStyle(Color.textSecondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
+        .padding(.horizontal, 12)
+    }
+
+    private func performOptimize() {
+        guard !vm.isOptimizing, !vm.isStreaming, settings.isConfigured else { return }
+        let text = inputText
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        optimizeError = nil
+        Task {
+            vm.draft = text
+            if let error = await vm.optimizeDraft() {
+                optimizeError = error
+            } else {
+                inputText = vm.draft
+            }
         }
     }
 

@@ -48,3 +48,31 @@ final class PathSecurityRegressionTests: XCTestCase {
         XCTAssertNil(PathResolver.resolve(root: URL(fileURLWithPath: "/tmp/r"), relative: "~", blockedTopLevel: []))
     }
 }
+
+final class CostAndModeTests: XCTestCase {
+
+    func testModeDisplayNames() {
+        XCTAssertEqual(ChatMode.lite.displayName, "快速模式")
+        XCTAssertEqual(ChatMode.deep.displayName, "深度模式")
+    }
+
+    func testCostYuanCalculation() {
+        // 1M 输入 tokens × ¥2/M + 0.5M 输出 tokens × ¥8/M = ¥6
+        let usage = UsageInfo(promptTokens: 1_000_000, completionTokens: 500_000)
+        XCTAssertEqual(usage.costYuan(inputPerM: 2, outputPerM: 8), 6, accuracy: 0.000001)
+        // 空用量
+        let empty = UsageInfo(promptTokens: 0, completionTokens: 0)
+        XCTAssertEqual(empty.costYuan(inputPerM: 2, outputPerM: 8), 0)
+    }
+
+    func testCostTextFormatting() {
+        XCTAssertEqual(UsageInfo.costText(0), "¥0")
+        XCTAssertEqual(UsageInfo.costText(1.05), "¥1.05")
+        XCTAssertEqual(UsageInfo.costText(1.5), "¥1.5")
+        XCTAssertEqual(UsageInfo.costText(0.012345), "¥0.0123")   // ≥0.01 → 4 位精度
+        XCTAssertEqual(UsageInfo.costText(0.001234), "¥0.001234") // <0.01 → 6 位精度
+        XCTAssertEqual(UsageInfo.costText(0.01), "¥0.01")
+        // 尾零去除：0.500000 → 0.5
+        XCTAssertEqual(UsageInfo.costText(0.5), "¥0.5")
+    }
+}

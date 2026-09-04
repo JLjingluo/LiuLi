@@ -91,7 +91,7 @@ enum ContextBuilder {
                         }
                     }
                     if parts.isEmpty {
-                        // 省流模式下历史消息被剥离图片后为空：跳过该条
+                        // 快速模式下历史消息被剥离图片后为空：跳过该条
                         continue
                     }
                     out.append(APIPayloadMessage(role: "user", content: .parts(parts)))

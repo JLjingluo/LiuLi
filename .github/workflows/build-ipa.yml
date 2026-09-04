@@ -42,11 +42,11 @@ jobs:
         run: |
           mkdir -p build/Payload
           cp -R build/DerivedData/Build/Products/Release-iphoneos/LiuLi.app build/Payload/
-          cd build && zip -qry LiuLi-unsigned.ipa Payload
+          cd build && zip -qry Nexus-unsigned.ipa Payload
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: LiuLi-unsigned-ipa
-          path: build/LiuLi-unsigned.ipa
+          name: Nexus-unsigned-ipa
+          path: build/Nexus-unsigned.ipa
           retention-days: 30

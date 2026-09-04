@@ -4,7 +4,7 @@ import UIKit
 // MARK: - 应用信息（改名只改这里 + Info.plist 的 CFBundleDisplayName）
 
 enum AppInfo {
-    static let displayName = "琉璃"
+    static let displayName = "Nexus"
     static let tagline = "AI 编程与对话助手"
 }
 

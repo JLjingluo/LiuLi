@@ -273,7 +273,7 @@ struct SettingsView: View {
     private var aboutSection: some View {
         Section {
             LabeledRow(label: "版本", value: "1.0.0")
-            LabeledRow(label: "工作区", value: "文件 App → 我的 iPhone → 琉璃助手")
+            LabeledRow(label: "工作区", value: "文件 App → 我的 iPhone → Nexus")
         } header: {
             Text("关于")
         }

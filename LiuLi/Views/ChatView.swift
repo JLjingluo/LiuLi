@@ -1,7 +1,7 @@
 import SwiftUI
 import PhotosUI
 
-// MARK: - 聊天主界面 v2（液态玻璃版）
+// MARK: - 聊天主界面 v3（液态玻璃版）
 // 顶部：侧栏入口 + 低调标题 + 模式胶囊
 // 中部：消息流（用户玻璃气泡 / AI 无气泡排版）
 // 底部：三件独立玻璃胶囊（[+] 圆 · 长文本胶囊 · 发送圆），内容从间隙间折射而过
@@ -152,10 +152,11 @@ struct ChatView: View {
                 ForEach(store.current?.messages ?? []) { message in
                     MessageBubble(
                         message: message,
-                        isStreaming: vm.isStreaming && message.id == store.current?.messages.last?.id,
+                        isStreaming: vm.stream.activeID == message.id,
                         isLatestAssistant: isLatestAssistant(message),
                         reasoningExpanded: reasoningBinding(message),
                         showTimestamp: settings.showTimestamps,
+                        stream: vm.stream,
                         onRegenerate: {
                             // 重写：回到贴底并跟随新一轮生成位置
                             pinnedToBottom = true
@@ -203,9 +204,9 @@ struct ChatView: View {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
-        // 流式跟随：由 VM 的节流 revision 信号驱动（~8 次/秒），此处再限 ~4 次/秒；
+        // 流式跟随：由 VM 的节流 scrollTick 信号驱动（~8 次/秒），此处再限 ~4 次/秒；
         // 用户上滑脱离贴底后立即停止跟随（由 syncPinnedState 持续维护）
-        .onChange(of: vm.revision) { _, _ in
+        .onChange(of: vm.scrollTick) { _, _ in
             guard vm.isStreaming, settings.autoFollowEnabled, pinnedToBottom,
                   let last = store.current?.messages.last else { return }
             guard Date().timeIntervalSince(lastScrollAt) > 0.25 else { return }

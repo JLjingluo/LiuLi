@@ -133,7 +133,7 @@ struct SettingsView: View {
             VStack(spacing: 7) {
                 ZStack {
                     Circle()
-                        .fill(LinearGradient(colors: [palette.brand, palette.blobB],
+                        .fill(LinearGradient(colors: [palette.brand, palette.brandLight],
                                              startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 38, height: 38)
                     if selected {
@@ -478,7 +478,7 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section {
-            LabeledRow(label: "版本", value: "1.7.0")
+            LabeledRow(label: "版本", value: AppInfo.version)
             LabeledRow(label: "工作区", value: "文件 App → 我的 iPhone → Nexus")
         } header: {
             Text("关于")

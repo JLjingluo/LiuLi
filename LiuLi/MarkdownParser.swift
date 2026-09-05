@@ -236,3 +236,38 @@ enum MarkdownParser {
         }
     }
 }
+
+// MARK: - 流式文本切分（纯逻辑，Linux 已测）
+//
+// 流式渲染防抖的核心：把正在增长的文本切成「稳定前缀（完整块，缓存解析渲染）」
+// 与「增量尾部（纯文本 + 光标直出）」，半闭合结构绝不进入解析管线，杜绝横跳。
+
+enum MarkdownStreamer {
+
+    /// 规则：空行是块边界；从后往前找最近一个「代码围栏成对闭合」的空行，
+    /// 之前稳定，之后增量。全程未找到安全边界（如开头就是一个未闭合的大代码块）
+    /// → 整段按增量处理。
+    static func splitStablePrefix(_ source: String) -> (stable: String, tail: String) {
+        var searchRange = source.startIndex..<source.endIndex
+        while let range = source.range(of: "\n\n", options: .backwards, range: searchRange) {
+            let candidate = String(source[..<range.lowerBound])
+            if !hasUnclosedFence(candidate) {
+                return (candidate, String(source[range.upperBound...]))
+            }
+            searchRange = source.startIndex..<range.lowerBound
+        }
+        return ("", source)
+    }
+
+    /// 判断文本里是否有未闭合的代码围栏（``` 或 ~~~）
+    static func hasUnclosedFence(_ text: String) -> Bool {
+        var count = 0
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("```") || t.hasPrefix("~~~") {
+                count += 1
+            }
+        }
+        return count % 2 != 0
+    }
+}

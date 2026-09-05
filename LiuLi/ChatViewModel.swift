@@ -12,38 +12,114 @@ struct PendingImage: Identifiable, Equatable {
     }
 }
 
-// MARK: - 聊天视图模型（流式 + Agent 工具循环）
+// MARK: - 流式内容缓冲（v3 架构核心）
+//
+// DeepSeek 式流畅的关键：正在生成的文字放在独立的 @Published 缓冲里，
+// 由正在流式的那一条消息气泡内部的子视图单独订阅（其余气泡不订阅、零开销）。
+// 流式结束后一次性固化进 store 完成持久化。
+
+@MainActor
+final class StreamBuffer: ObservableObject {
+    /// 正在流式生成的 assistant 消息 id（nil = 无流式）
+    @Published private(set) var activeID: UUID?
+    /// 流式正文（增量累积）
+    @Published private(set) var text: String = ""
+    /// 流式思考链（增量累积）
+    @Published private(set) var reasoning: String = ""
+    /// 是否已开始产出正文（区分「排队中」与「正在输出」两种等待态）
+    @Published private(set) var hasContent: Bool = false
+
+    // token 到着先落待刷新区，~20fps 合并发布：
+    // 订阅视图每秒最多重绘 20 次（DeepSeek 式平滑打字，同时杜绝高频刷新带来的主线程压力）
+    private var pendingText = ""
+    private var pendingReasoning = ""
+    private var flushScheduled = false
+
+    func begin(id: UUID) {
+        activeID = id
+        text = ""
+        reasoning = ""
+        hasContent = false
+        pendingText = ""
+        pendingReasoning = ""
+        flushScheduled = false
+    }
+
+    func append(content: String?, reasoningPart: String?) {
+        if let r = reasoningPart, !r.isEmpty { pendingReasoning += r }
+        if let c = content, !c.isEmpty { pendingText += c }
+        scheduleFlush()
+    }
+
+    private func scheduleFlush() {
+        guard !flushScheduled else { return }
+        flushScheduled = true
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms ≈ 20fps
+            guard let self, !Task.isCancelled else { return }
+            self.flush()
+        }
+    }
+
+    /// 立即把待刷新区并入已发布区（收尾/固化前调用，保证最后一个 token 不丢）
+    func flush() {
+        flushScheduled = false
+        if !pendingReasoning.isEmpty {
+            reasoning += pendingReasoning
+            pendingReasoning = ""
+        }
+        if !pendingText.isEmpty {
+            text += pendingText
+            pendingText = ""
+            hasContent = true
+        }
+    }
+
+    func finish() {
+        activeID = nil
+        text = ""
+        reasoning = ""
+        hasContent = false
+        pendingText = ""
+        pendingReasoning = ""
+        flushScheduled = false
+    }
+}
+
+// MARK: - 聊天视图模型 v3（流式 + Agent 工具循环）
 
 @MainActor
 final class ChatViewModel: ObservableObject {
 
-    // 绑定数据
+    // 输入区
     @Published var draft: String = ""
     @Published var pendingImages: [PendingImage] = []
-    @Published var isStreaming = false
-    @Published var visionWarning: String?
-    @Published var isOptimizing = false
-    /// 优化完成后待撤销的原文（nil = 无可撤销）
-    @Published var undoableOptimizedText: String?
-    /// 流式刷新信号（节流后 ~8 次/秒，视图据此跟随滚动）
-    @Published private(set) var revision: Int = 0
 
-    // 依赖
+    // 生成状态
+    @Published private(set) var isStreaming = false
+    /// 滚动跟随信号（节流 ~8 次/秒，视图据此回底）
+    @Published private(set) var scrollTick: Int = 0
+
+    // 识图提示
+    @Published var visionWarning: String?
+
+    // 提示词优化
+    @Published private(set) var isOptimizing = false
+    @Published private(set) var undoableOptimizedText: String?
+
+    /// 流式内容缓冲（视图单独订阅）
+    let stream = StreamBuffer()
+
+    // 依赖与内部状态
     private let store: ConversationStore
     private let settings: AppSettings
     private let toolBox: AgentToolBox
     private var streamTask: Task<Void, Never>?
-    private var saveTask: Task<Void, Never>?
-    private var pendingFlush: Task<Void, Never>?
-    private var lastFlushAt = Date.distantPast
-    /// 最近一次收到流数据的时间（后台挂起检测用）
+    private var lastTickAt = Date.distantPast
     private var lastChunkAt = Date()
-    /// 后台任务断言（切后台后争取 ~30s 继续生成）
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
-    /// 最新会话快照（后台断言到期时立即落盘，防丢数据）
-    private var latestConversation: Conversation?
+    private var latestSnapshot: Conversation?
 
-    /// 工具循环最大轮数（防死循环）
     static let maxToolRounds = 8
 
     init(store: ConversationStore, settings: AppSettings) {
@@ -52,6 +128,56 @@ final class ChatViewModel: ObservableObject {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
         self.toolBox = AgentToolBox(root: docs)
+    }
+
+    // MARK: 发送
+
+    var canSend: Bool {
+        !isStreaming && settings.isConfigured &&
+        (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingImages.isEmpty)
+    }
+
+    var modelSupportsVision: Bool {
+        VisionCapability.likelySupportsVision(modelID: settings.model)
+    }
+
+    func send() {
+        guard canSend else { return }
+        let prompt = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let images = pendingImages.map { $0.dataURL }
+        draft = ""
+        pendingImages = []
+
+        guard var conv = store.snapshot() else { return }
+        conv.messages.append(ChatMessage(role: .user, text: prompt, images: images))
+        if conv.title == "新对话", !prompt.isEmpty {
+            conv.title = String(prompt.prefix(18))
+        }
+        store.commit(conv, persist: true)
+        startGeneration()
+    }
+
+    /// 重新生成：移除末尾 assistant 组，重新请求
+    func regenerate() {
+        guard !isStreaming else { return }
+        guard let conv = store.trimTrailingAssistantGroup() else { return }
+        guard conv.messages.contains(where: { $0.role == .user }) else { return }
+        startGeneration()
+    }
+
+    // MARK: 停止
+
+    func stop() {
+        streamTask?.cancel()
+        streamTask = nil
+    }
+
+    /// 前台恢复检查：后台挂起导致的僵死流自动收尾
+    func recoverIfNeeded() {
+        guard isStreaming else { return }
+        guard Date().timeIntervalSince(lastChunkAt) > 30 else { return }
+        streamTask?.cancel()
+        streamTask = nil
     }
 
     // MARK: 提示词优化
@@ -82,7 +208,6 @@ final class ChatViewModel: ObservableObject {
             ),
             includeUsage: false
         )
-        // 非流式一次往返（比 SSE 快数倍）；低温度保证改写稳定；限长防啰嗦
         let payload = ChatCompletionRequest(
             model: settings.model,
             messages: [
@@ -113,15 +238,17 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    /// 撤销最近一次优化
     func undoOptimize() {
         guard let original = undoableOptimizedText else { return }
         draft = original
         undoableOptimizedText = nil
     }
 
+    func dismissOptimizeState() {
+        undoableOptimizedText = nil
+    }
+
     private var contextOptions: ContextBuildOptions {
-        // 用户编辑过的提示词为空时，回退到默认（保证行为可预期）
         let lite = settings.systemPromptLite.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? AppSettings.defaultLiteSystemPrompt : settings.systemPromptLite
         let deep = settings.systemPromptDeep.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -129,99 +256,18 @@ final class ChatViewModel: ObservableObject {
         return ContextBuildOptions(liteSystemPrompt: lite, deepSystemPrompt: deep)
     }
 
-    // MARK: 发送
-
-    var canSend: Bool {
-        !isStreaming && settings.isConfigured &&
-        (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingImages.isEmpty)
-    }
-
-    /// 识图能力预检：当前模型不支持视觉时给出提示
-    var modelSupportsVision: Bool {
-        VisionCapability.likelySupportsVision(modelID: settings.model)
-    }
-
-    func send() {
-        guard canSend else { return }
-
-        let prompt = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        let images = pendingImages.map { $0.dataURL }
-        draft = ""
-        pendingImages = []
-
-        // 用户已通过附图时的多模态提示确认，这里直接发送
-
-        guard let conv = store.current else { return }
-        var conversation = conv
-
-        // 用户消息
-        conversation.messages.append(ChatMessage(role: .user, text: prompt, images: images))
-        // 会话标题：取首条用户消息前 18 字
-        if conversation.title == "新对话", !prompt.isEmpty {
-            conversation.title = String(prompt.prefix(18))
-        }
-        store.update(conversation)
-
-        runGeneration()
-    }
-
-    /// 重新生成：移除末尾 assistant 组，重新请求
-    func regenerate() {
-        guard !isStreaming, let conv = store.current else { return }
-        var conversation = conv
-        // 去掉末尾连续的 assistant/tool 消息（保留最后的用户消息）
-        while let last = conversation.messages.last, last.role != .user {
-            conversation.messages.removeLast()
-        }
-        guard conversation.messages.contains(where: { $0.role == .user }) else { return }
-        store.update(conversation)
-        runGeneration()
-    }
-
-    // MARK: 停止
-
-    func stop() {
-        streamTask?.cancel()
-        streamTask = nil
-        isStreaming = false
-        GenerationActivityCenter.shared.end()
-    }
-
-    /// 前台恢复检查：后台挂起导致的僵死流（长时间无数据）自动收尾，避免界面按钮被卡死
-    func recoverIfNeeded() {
-        guard isStreaming else { return }
-        guard Date().timeIntervalSince(lastChunkAt) > 30 else { return }
-        stop()
-        if var conv = store.current, let last = conv.messages.last, last.role == .assistant {
-            if last.text.isEmpty {
-                conv.messages[conv.messages.count - 1].text = "（后台挂起导致生成中断，请点重新生成）"
-            } else {
-                conv.messages[conv.messages.count - 1].errorMessage = "（后台挂起导致中断，内容可能不完整）"
-            }
-            flush(conv)
-            store.persistToDisk(conv)
-        }
-    }
-
-    // MARK: 后台任务断言（切后台后争取 ~30s 完成生成）
+    // MARK: 后台任务断言
 
     private func beginBackgroundWork() {
         guard bgTask == .invalid else { return }
         bgTask = UIApplication.shared.beginBackgroundTask(withName: "NexusGeneration") { [weak self] in
-            // 到期瞬间：先把最新快照落盘（防丢内容），再结束断言
             Task { @MainActor in
-                self?.persistLatestSnapshot()
+                if let snap = self?.latestSnapshot {
+                    self?.store.persistToDisk(snap)
+                }
                 self?.endBackgroundWork()
             }
         }
-    }
-
-    /// 后台断言到期：把最近一次会话快照立即写入磁盘（挂起前抢救数据）
-    private func persistLatestSnapshot() {
-        guard let conv = latestConversation else { return }
-        flush(conv)
-        store.persistToDisk(conv)
-        latestConversation = nil
     }
 
     private func endBackgroundWork() {
@@ -232,188 +278,159 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: 生成主循环
 
-    private func runGeneration() {
-        guard let conv = store.current else { return }
-        var conversation = conv
-        let mode = conversation.mode
+    private func startGeneration() {
+        guard let snapshot = store.snapshot() else { return }
 
         isStreaming = true
         lastChunkAt = Date()
-        GenerationActivityCenter.shared.start(modeName: mode.displayName)
+        GenerationActivityCenter.shared.start(modeName: snapshot.mode.displayName)
         beginBackgroundWork()
 
         streamTask = Task { [weak self] in
             guard let self else { return }
-            defer {
-                self.isStreaming = false
-                self.flush(conversation)                 // 立即刷出最终状态
-                self.store.persistToDisk(conversation)  // 最终落盘
-                self.latestConversation = nil
-                self.endBackgroundWork()
-                GenerationActivityCenter.shared.end()
-            }
+            var working = snapshot
+            await self.generationLoop(working: &working)
+            // 收尾（正常完成 / 取消 / 异常都走这里）
+            // 顺序：先固化进 store，再停缓冲、再落 isStreaming——
+            // 同一 runloop 内合并为一次视图更新，气泡直接从「流式态」切到「完整正文」，无空帧
+            self.store.commit(working, persist: true)
+            self.stream.finish()
+            self.isStreaming = false
+            self.latestSnapshot = nil
+            self.endBackgroundWork()
+            GenerationActivityCenter.shared.end()
+        }
+    }
 
-            let client = APIClient(
-                endpoint: APIClient.Endpoint(
-                    base: self.settings.baseURL ?? URL(fileURLWithPath: "/"),
-                    apiKey: self.settings.apiKey
-                ),
-                includeUsage: self.settings.includeUsage
+    private func generationLoop(working: inout Conversation) async {
+        let mode = working.mode
+        let client = APIClient(
+            endpoint: APIClient.Endpoint(
+                base: settings.baseURL ?? URL(fileURLWithPath: "/"),
+                apiKey: settings.apiKey
+            ),
+            includeUsage: settings.includeUsage
+        )
+
+        for _ in 0..<Self.maxToolRounds {
+            if Task.isCancelled { finalizeStopped(working: &working); return }
+
+            let context = ContextBuilder.buildContext(
+                messages: working.messages, mode: mode, options: contextOptions
+            )
+            let payload = ChatCompletionRequest(
+                model: settings.model,
+                messages: context,
+                stream: true,
+                temperature: mode == .lite ? 0.5 : 0.7,
+                max_tokens: nil,
+                tools: mode == .deep ? AgentToolBox.toolSchemas() : nil,
+                tool_choice: mode == .deep ? "auto" : nil,
+                stream_options: nil
             )
 
-            for round in 0..<Self.maxToolRounds {
-                if Task.isCancelled { return }
+            // 流式占位：空壳 assistant 进 store（结构变化一次），内容走 StreamBuffer
+            // 顺序：先 begin 再 commit——视图因结构插入重算时 activeID 已就位，气泡即刻进入流式态
+            let assistantID = UUID()
+            stream.begin(id: assistantID)
+            working.messages.append(ChatMessage(id: assistantID, role: .assistant))
+            store.commit(working, persist: false)
+            emitTick(immediate: true)
 
-                // 1. 构建上下文（含历史修复）
-                let context = ContextBuilder.buildContext(
-                    messages: conversation.messages,
-                    mode: mode,
-                    options: self.contextOptions
-                )
+            let accumulator = StreamAccumulator()
+            var streamError: Error?
 
-                // 2. 请求（深度模式带文件工具）
-                let payload = ChatCompletionRequest(
-                    model: self.settings.model,
-                    messages: context,
-                    stream: true,
-                    temperature: mode == .lite ? 0.5 : 0.7,
-                    max_tokens: nil,
-                    tools: mode == .deep ? AgentToolBox.toolSchemas() : nil,
-                    tool_choice: mode == .deep ? "auto" : nil,
-                    stream_options: nil
-                )
-
-                // 3. 流式占位 assistant 消息
-                var assistantMessage = ChatMessage(role: .assistant)
-                conversation.messages.append(assistantMessage)
-                let assistantIndex = conversation.messages.count - 1
-                self.refresh(conversation, immediate: true)
-
-                let accumulator = StreamAccumulator()
-                var streamError: Error?
-
-                do {
-                    for try await chunk in client.streamChat(request: payload) {
-                        if Task.isCancelled { break }
-                        self.lastChunkAt = Date()
-                        accumulator.ingest(chunk)
-                        // 增量更新占位消息（直接改内存，节流落盘 + 节流刷 UI）
-                        if let delta = chunk.choices?.first?.delta {
-                            if let c = delta.content, !c.isEmpty {
-                                conversation.messages[assistantIndex].text += c
-                            }
-                            if let r = delta.reasoning_content, !r.isEmpty {
-                                conversation.messages[assistantIndex].reasoning =
-                                    (conversation.messages[assistantIndex].reasoning ?? "") + r
-                            }
-                        }
-                        self.refresh(conversation)
-                    }
-                } catch {
-                    streamError = error
+            do {
+                for try await chunk in client.streamChat(request: payload) {
+                    if Task.isCancelled { break }
+                    lastChunkAt = Date()
+                    accumulator.ingest(chunk)
+                    let delta = chunk.choices?.first?.delta
+                    stream.append(content: delta?.content, reasoningPart: delta?.reasoning_content)
+                    GenerationActivityCenter.shared.update(stream.text)
+                    emitTick()
                 }
+            } catch {
+                streamError = error
+            }
+            latestSnapshot = working
 
-                if Task.isCancelled {
-                    // 用户主动停止：保留已有内容
-                    conversation.messages[assistantIndex].text =
-                        conversation.messages[assistantIndex].text.isEmpty
-                            ? "（已停止）"
-                            : conversation.messages[assistantIndex].text
-                    self.refresh(conversation, immediate: true)
-                    return
-                }
-
-                // 4. 工具调用分支
-                if accumulator.hasToolCalls {
-                    let calls = accumulator.orderedToolCalls()
-                    // 4a. 固化 assistant 工具消息
-                    conversation.messages[assistantIndex].toolCalls = calls
-                    conversation.messages[assistantIndex].text = accumulator.content
-                    conversation.messages[assistantIndex].reasoning = accumulator.reasoning.isEmpty ? nil : accumulator.reasoning
-                    conversation.messages[assistantIndex].usage = accumulator.usage
-                    self.refresh(conversation, immediate: true)
-
-                    // 4b. 逐个执行工具并回填结果
-                    for call in calls {
-                        let result = self.toolBox.execute(name: call.name, argumentsJSON: call.arguments)
-                        conversation.messages.append(ChatMessage(
-                            role: .tool,
-                            text: result,
-                            toolCallID: call.id,
-                            toolName: call.name
-                        ))
-                        self.refresh(conversation, immediate: true)
-                    }
-                    continue // 下一轮
-                }
-
-                // 5. 普通完成
-                conversation.messages[assistantIndex].text = accumulator.content.isEmpty
-                    ? conversation.messages[assistantIndex].text
-                    : accumulator.content
-                conversation.messages[assistantIndex].reasoning = accumulator.reasoning.isEmpty
-                    ? conversation.messages[assistantIndex].reasoning
-                    : accumulator.reasoning
-                conversation.messages[assistantIndex].usage = accumulator.usage
-
-                if let error = streamError {
-                    let message = APIClient.describe(error)
-                    let hasPartial = !conversation.messages[assistantIndex].text.isEmpty
-                    conversation.messages[assistantIndex].errorMessage = hasPartial
-                        ? "（生成中断：\(message)）"
-                        : message
-                }
-                if accumulator.content.isEmpty && streamError == nil && conversation.messages[assistantIndex].text.isEmpty {
-                    conversation.messages[assistantIndex].text = "（模型未返回内容）"
-                }
-                self.refresh(conversation, immediate: true)
+            if Task.isCancelled {
+                finalizeStopped(working: &working, assistantID: assistantID)
                 return
             }
 
-            // 工具轮数耗尽
-            conversation.messages.append(ChatMessage(
-                role: .note,
-                text: "已达到工具调用轮数上限（\(Self.maxToolRounds)），已停止以避免循环。"
-            ))
-            self.refresh(conversation, immediate: true)
-        }
-    }
-
-    /// 内存更新 + 双节流（UI ~8 次/秒、落盘 0.9s 防抖）
-    /// —— 修复：此前每个 token 全量刷新 UI，导致点击被吞、滚动卡顿、消息闪跳
-    private func refresh(_ conversation: Conversation, immediate: Bool = false) {
-        if immediate || Date().timeIntervalSince(lastFlushAt) >= 0.12 {
-            flush(conversation)
-        } else {
-            let snapshot = conversation
-            pendingFlush?.cancel()
-            pendingFlush = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 120_000_000)
-                guard !Task.isCancelled, let self else { return }
-                self.flush(snapshot)
+            // 工具调用分支：固化本轮 assistant → 执行工具 → 追加 tool 结果 → 下一轮
+            if accumulator.hasToolCalls {
+                let calls = accumulator.orderedToolCalls()
+                mutate(working: &working, id: assistantID) { m in
+                    m.text = accumulator.content
+                    m.reasoning = accumulator.reasoning.isEmpty ? nil : accumulator.reasoning
+                    m.toolCalls = calls
+                    m.usage = accumulator.usage
+                }
+                store.commit(working, persist: false)
+                for call in calls {
+                    if Task.isCancelled { finalizeStopped(working: &working); return }
+                    let result = toolBox.execute(name: call.name, argumentsJSON: call.arguments)
+                    working.messages.append(ChatMessage(
+                        role: .tool, text: result, toolCallID: call.id, toolName: call.name
+                    ))
+                    store.commit(working, persist: false)
+                }
+                emitTick(immediate: true)
+                continue
             }
+
+            // 普通完成：缓冲固化进消息（先冲刷待刷新区，最后一个 token 不丢）
+            stream.flush()
+            mutate(working: &working, id: assistantID) { m in
+                let finalText = accumulator.content.isEmpty ? stream.text : accumulator.content
+                m.text = finalText
+                m.reasoning = accumulator.reasoning.isEmpty
+                    ? (stream.reasoning.isEmpty ? nil : stream.reasoning)
+                    : accumulator.reasoning
+                m.usage = accumulator.usage
+                if let streamError {
+                    let message = APIClient.describe(streamError)
+                    m.errorMessage = finalText.isEmpty ? message : "（生成中断：\(message)）"
+                }
+                if m.text.isEmpty && streamError == nil && m.toolCalls.isEmpty {
+                    m.text = "（模型未返回内容）"
+                }
+            }
+            return
+        }
+
+        working.messages.append(ChatMessage(
+            role: .note,
+            text: "已达到工具调用轮数上限（\(Self.maxToolRounds)），已停止以避免循环。"
+        ))
+    }
+
+    /// 用户主动停止 / 后台僵死：把缓冲内容固化，保留已生成部分
+    private func finalizeStopped(working: inout Conversation, assistantID: UUID? = nil) {
+        stream.flush()
+        if let assistantID,
+           let idx = working.messages.firstIndex(where: { $0.id == assistantID }) {
+            working.messages[idx].text = stream.text.isEmpty ? "（已停止）" : stream.text
+            working.messages[idx].reasoning = stream.reasoning.isEmpty ? nil : stream.reasoning
+        } else if let last = working.messages.last, last.role == .assistant, last.text.isEmpty {
+            let idx = working.messages.count - 1
+            working.messages[idx].text = "（生成中断，请点重新生成）"
         }
     }
 
-    /// 立即把会话快照写进内存（触发 UI 刷新）并安排落盘
-    private func flush(_ conversation: Conversation) {
-        lastFlushAt = Date()
-        latestConversation = conversation
-        revision += 1
-        store.update(conversation, persist: false)
-        schedulePersist(conversation)
-        // 灵动岛 / 锁屏实时活动（内部自带 1s 节流）
-        if let last = conversation.messages.last, last.role == .assistant {
-            GenerationActivityCenter.shared.update(last.text)
-        }
+    private func mutate(working: inout Conversation, id: UUID, _ mutate: (inout ChatMessage) -> Void) {
+        guard let idx = working.messages.firstIndex(where: { $0.id == id }) else { return }
+        mutate(&working.messages[idx])
     }
 
-    private func schedulePersist(_ conversation: Conversation) {
-        saveTask?.cancel()
-        saveTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 900_000_000) // 0.9s 防抖
-            guard !Task.isCancelled, let self else { return }
-            self.store.persistToDisk(conversation)
-        }
+    // MARK: 滚动跟随信号（节流 ~8 次/秒）
+
+    private func emitTick(immediate: Bool = false) {
+        guard immediate || Date().timeIntervalSince(lastTickAt) >= 0.12 else { return }
+        lastTickAt = Date()
+        scrollTick &+= 1
     }
 }

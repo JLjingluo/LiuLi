@@ -1,8 +1,10 @@
 import SwiftUI
 
-// MARK: - 消息视图 v2（液态玻璃版）
+// MARK: - 消息视图 v3（液态玻璃 + 细粒度流式订阅）
 // - 用户：右侧玻璃气泡（品牌微染）或纯色气泡（设置可选）
 // - AI：左侧小 logo 头像 + 无气泡直接排版 + 底部小灰图标操作栏
+// - 流式：仅正在生成的气泡经 StreamingAssistantBody 订阅 StreamBuffer（~20fps），
+//   其余气泡读持久化内容、零订阅零开销——DeepSeek 式流畅的视图层根基
 // - 长按消息 → contextMenu（复制 / 选择文本 / 分享 / 重新生成）
 
 struct MessageBubble: View {
@@ -14,10 +16,17 @@ struct MessageBubble: View {
     var reasoningExpanded: Binding<Bool>? = nil
     /// 是否显示时间戳（设置项）
     var showTimestamp = false
+    /// 流式内容缓冲（仅正在流式的消息用到；其余消息为 nil，不订阅、零开销）
+    var stream: StreamBuffer? = nil
     var onRegenerate: (() -> Void)? = nil
 
     @EnvironmentObject private var settings: AppSettings
     @State private var showTextSelector = false
+
+    /// 本条消息是否正处于流式生成中（activeID 命中 + 缓冲存在）
+    private var isActiveStreaming: Bool {
+        isStreaming && stream != nil
+    }
 
     var body: some View {
         switch message.role {
@@ -155,70 +164,27 @@ struct MessageBubble: View {
                 Text(AppInfo.displayName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.textTertiary)
-                if isStreaming {
+                if isActiveStreaming {
                     ThinkingIndicator()
                 }
                 Spacer()
             }
 
-            // 思考链（折叠；展开状态由 ChatView 持有）
-            if let reasoning = message.reasoning, !reasoning.isEmpty {
-                ReasoningDisclosure(
-                    text: reasoning,
-                    expanded: reasoningExpanded ?? .constant(false),
-                    isThinking: isStreaming
+            if isActiveStreaming, let stream {
+                // 流式态：独立子视图订阅 StreamBuffer（~20fps），其余气泡零开销
+                StreamingAssistantBody(
+                    stream: stream,
+                    fontSize: settings.chatFontSize,
+                    markdownEnabled: settings.markdownEnabled,
+                    reasoningExpanded: reasoningExpanded ?? .constant(false)
                 )
-            }
-
-            // 正文（Markdown / 纯文本，随设置切换；无气泡）
-            if !message.text.isEmpty {
-                if settings.markdownEnabled {
-                    MarkdownTextView(markdown: message.text, size: settings.chatFontSize)
-                } else {
-                    Text(message.text)
-                        .font(.system(size: settings.chatFontSize))
-                        .foregroundStyle(Color.textPrimary)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            } else if message.toolCalls.isEmpty && !isStreaming && message.errorMessage == nil {
-                HStack(spacing: 4) {
-                    ForEach(0..<3, id: \.self) { i in
-                        TypingDot(delay: Double(i) * 0.18)
-                    }
-                }
-                .padding(.top, 4)
-            }
-
-            // 工具调用展示
-            if !message.toolCalls.isEmpty {
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(message.toolCalls) { call in
-                        ToolCallRow(call: call)
-                    }
-                }
-            }
-
-            // 错误信息
-            if let error = message.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.errorText)
-            }
-
-            // 本次花费（按设置页单价估算）
-            if let usage = message.usage {
-                let cost = usage.costYuan(
-                    inputPerM: settings.inputPricePerM,
-                    outputPerM: settings.outputPricePerM
-                )
-                Text("本次 \(UsageInfo.costText(cost))")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.textTertiary.opacity(0.8))
+            } else {
+                // 静态态：全部读持久化内容（body 重算零成本，解析有缓存）
+                staticAssistantBody
             }
 
             // 操作栏（DeepSeek 式：小灰图标，流式完成后显示）
-            if !isStreaming && (isLatestAssistant || message.errorMessage != nil) {
+            if !isActiveStreaming && (isLatestAssistant || message.errorMessage != nil) {
                 assistantActionBar
             }
 
@@ -230,6 +196,59 @@ struct MessageBubble: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(isPresented: $showTextSelector) {
             TextSelectorView(title: "AI 回复", text: message.text)
+        }
+    }
+
+    /// 静态 AI 消息体：思考链 + 正文 + 工具调用 + 错误 + 花费
+    @ViewBuilder
+    private var staticAssistantBody: some View {
+        // 思考链（折叠；展开状态由 ChatView 持有）
+        if let reasoning = message.reasoning, !reasoning.isEmpty {
+            ReasoningDisclosure(
+                text: reasoning,
+                expanded: reasoningExpanded ?? .constant(false),
+                isThinking: false
+            )
+        }
+
+        // 正文（Markdown / 纯文本）
+        if !message.text.isEmpty {
+            if settings.markdownEnabled {
+                MarkdownTextView(markdown: message.text, size: settings.chatFontSize, isStreaming: false)
+            } else {
+                Text(message.text)
+                    .font(.system(size: settings.chatFontSize))
+                    .foregroundStyle(Color.textPrimary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+
+        // 工具调用展示
+        if !message.toolCalls.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(message.toolCalls) { call in
+                    ToolCallRow(call: call)
+                }
+            }
+        }
+
+        // 错误信息
+        if let error = message.errorMessage {
+            Label(error, systemImage: "exclamationmark.triangle")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.errorText)
+        }
+
+        // 本次花费（按设置页单价估算）
+        if let usage = message.usage {
+            let cost = usage.costYuan(
+                inputPerM: settings.inputPricePerM,
+                outputPerM: settings.outputPricePerM
+            )
+            Text("本次 \(UsageInfo.costText(cost))")
+                .font(.system(size: 10))
+                .foregroundStyle(Color.textTertiary.opacity(0.8))
         }
     }
 
@@ -338,6 +357,73 @@ struct MessageBubble: View {
             .frame(maxWidth: .infinity)
             .multilineTextAlignment(.center)
             .padding(.vertical, 4)
+    }
+}
+
+// MARK: - 流式 AI 消息体（v3 架构核心视图）
+// 唯一订阅 StreamBuffer 的视图：只有「正在生成的那条气泡」随 token 刷新（~20fps），
+// 消息列表其余部分完全不感知流式，彻底消灭全列表重建。
+
+struct StreamingAssistantBody: View {
+    @ObservedObject var stream: StreamBuffer
+    let fontSize: CGFloat
+    let markdownEnabled: Bool
+    let reasoningExpanded: Binding<Bool>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 思考链（流式读缓冲；正文开产后 isThinking 熄灭）
+            if !stream.reasoning.isEmpty {
+                ReasoningDisclosure(
+                    text: stream.reasoning,
+                    expanded: reasoningExpanded,
+                    isThinking: !stream.hasContent
+                )
+            }
+
+            if !stream.text.isEmpty {
+                if markdownEnabled {
+                    // 稳定前缀 Markdown 缓存渲染 + 增量尾部纯文本光标
+                    MarkdownTextView(markdown: stream.text, size: fontSize, isStreaming: true)
+                } else {
+                    StreamingPlainText(text: stream.text, size: fontSize)
+                }
+            } else {
+                // 首个 token 到达前：打字圆点占位
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { i in
+                        TypingDot(delay: Double(i) * 0.18)
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 流式纯文本（关闭 Markdown 时）：直出 + 品牌色呼吸光标
+private struct StreamingPlainText: View {
+    let text: String
+    let size: CGFloat
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.53)) { context in
+            let cursorOn = Int(context.date.timeIntervalSince1970 / 0.53) % 2 == 0
+            Text(attributed(cursorOn: cursorOn))
+                .font(.system(size: size))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func attributed(cursorOn: Bool) -> AttributedString {
+        var body = AttributedString(text)
+        body.foregroundColor = .textPrimary
+        var cursor = AttributedString("▍")
+        cursor.foregroundColor = cursorOn ? Color.brand : Color.brand.opacity(0.12)
+        cursor.font = .system(size: size)
+        return body + cursor
     }
 }
 

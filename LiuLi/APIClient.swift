@@ -71,6 +71,49 @@ final class APIClient {
         throw APIClientError(message: "模型列表响应格式无法识别")
     }
 
+    // MARK: 非流式对话（提示词优化等短请求：一次往返，比 SSE 快）
+
+    /// 非流式 chat/completions 响应
+    struct ChatCompletionResponse: Decodable {
+        struct Choice: Decodable {
+            struct Message: Decodable { let content: String? }
+            let message: Message?
+        }
+        let choices: [Choice]?
+    }
+
+    /// 发起非流式请求，直接返回首条回复文本
+    func completeChat(request payload: ChatCompletionRequest) async throws -> String {
+        var request = URLRequest(url: endpoint.chatURL)
+        request.httpMethod = "POST"
+        for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
+        let body = ChatCompletionRequest(
+            model: payload.model,
+            messages: payload.messages,
+            stream: false,
+            temperature: payload.temperature,
+            max_tokens: payload.max_tokens,
+            tools: payload.tools,
+            tool_choice: payload.tool_choice,
+            stream_options: nil
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+        try Self.checkHTTP(response, data: data)
+
+        if let decoded = try? JSONDecoder().decode(ChatCompletionResponse.self, from: data),
+           let content = decoded.choices?.first?.message?.content,
+           !content.isEmpty {
+            return content
+        }
+        // 流式错误体格式兼容
+        if let err = try? JSONDecoder().decode(APIErrorBody.self, from: data), !err.message.isEmpty {
+            throw APIClientError(message: err.message)
+        }
+        throw APIClientError(message: "模型未返回有效内容，请重试")
+    }
+
     // MARK: 流式对话
 
     /// 发起流式 chat/completions，以事件流形式产出 SSE chunk。

@@ -13,6 +13,14 @@ enum ChatMode: String, Codable {
         case .deep: return "深度模式"
         }
     }
+
+    /// 顶栏胶囊用的短名（防止被长标题挤压）
+    var shortName: String {
+        switch self {
+        case .lite: return "快速"
+        case .deep: return "深度"
+        }
+    }
 }
 
 /// 一次模型发起的工具调用

@@ -10,6 +10,10 @@ struct MessageBubble: View {
     var isStreaming = false
     /// 是否是本轮生成的最后一条 assistant 消息（决定操作栏是否展示重新生成）
     var isLatestAssistant = false
+    /// 思考链展开状态（由 ChatView 持有，LazyVStack 回收不丢失）
+    var reasoningExpanded: Binding<Bool>? = nil
+    /// 是否显示时间戳（设置项）
+    var showTimestamp = false
     var onRegenerate: (() -> Void)? = nil
 
     @EnvironmentObject private var settings: AppSettings
@@ -76,7 +80,7 @@ struct MessageBubble: View {
     }
 
     private var userBubble: some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .trailing, spacing: 5) {
             if !message.images.isEmpty {
                 imageGrid
             }
@@ -98,6 +102,9 @@ struct MessageBubble: View {
                         .fill(Color.userBubble)
                     )
                     .frame(maxWidth: userBubbleMaxWidth, alignment: .trailing)
+            }
+            if showTimestamp {
+                timestampText
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -142,9 +149,13 @@ struct MessageBubble: View {
                 Spacer()
             }
 
-            // 思考链（折叠）
+            // 思考链（折叠；展开状态由 ChatView 持有）
             if let reasoning = message.reasoning, !reasoning.isEmpty {
-                ReasoningDisclosure(text: reasoning)
+                ReasoningDisclosure(
+                    text: reasoning,
+                    expanded: reasoningExpanded ?? .constant(false),
+                    isThinking: isStreaming
+                )
             }
 
             // 正文（Markdown / 纯文本，随设置切换；无气泡）
@@ -198,12 +209,30 @@ struct MessageBubble: View {
             if !isStreaming && (isLatestAssistant || message.errorMessage != nil) {
                 assistantActionBar
             }
+
+            // 时间戳（设置项开启时展示）
+            if showTimestamp {
+                timestampText
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(isPresented: $showTextSelector) {
             TextSelectorView(title: "AI 回复", text: message.text)
         }
     }
+
+    /// 消息时间戳（极小灰字）
+    private var timestampText: some View {
+        Text(Self.timestampFormatter.string(from: message.timestamp))
+            .font(.system(size: 9.5))
+            .foregroundStyle(Color.textTertiary.opacity(0.65))
+    }
+
+    private static let timestampFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
 
     private var aiAvatar: some View {
         ZStack {
@@ -332,48 +361,56 @@ struct TypingDot: View {
     }
 }
 
-// MARK: - 思考链折叠（DeepSeek 式：简单文字按钮；默认展开可设）
+// MARK: - 思考链折叠（展开状态由 ChatView 持有，流式刷新 / 列表回收均不丢失）
 
 struct ReasoningDisclosure: View {
     let text: String
-    @EnvironmentObject private var settings: AppSettings
-    @State private var expanded = false
-    @State private var appeared = false
+    @Binding var expanded: Bool
+    /// 是否仍在思考产出中（按钮加「思考中」呼吸态）
+    var isThinking = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 7) {
             Button {
                 Haptics.tap()
-                withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(expanded ? "收起思考" : "思考过程")
-                        .font(.system(size: 11.5, weight: .medium))
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    expanded.toggle()
                 }
-                .foregroundStyle(Color.textTertiary)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "lightbulb")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(isThinking ? Color.brand : Color.textTertiary)
+                    Text(expanded ? "收起思考" : "思考过程")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.textSecondary)
+                        .contentTransition(.opacity)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(Color.textTertiary)
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Color.surfaceCard))
+                .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.95))
-            .onAppear {
-                // 首次出现时应用「默认展开」设置
-                if !appeared {
-                    appeared = true
-                    expanded = settings.defaultExpandReasoning
-                }
-            }
 
             if expanded {
                 Text(text)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.textSecondary)
                     .textSelection(.enabled)
-                    .padding(.leading, 8)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 10)
+                    .padding(.vertical, 2)
                     .overlay(alignment: .leading) {
                         Rectangle()
                             .fill(Color.separator)
                             .frame(width: 2)
                     }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }

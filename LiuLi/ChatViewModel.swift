@@ -40,6 +40,8 @@ final class ChatViewModel: ObservableObject {
     private var lastChunkAt = Date()
     /// 后台任务断言（切后台后争取 ~30s 继续生成）
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
+    /// 最新会话快照（后台断言到期时立即落盘，防丢数据）
+    private var latestConversation: Conversation?
 
     /// 工具循环最大轮数（防死循环）
     static let maxToolRounds = 8
@@ -80,40 +82,35 @@ final class ChatViewModel: ObservableObject {
             ),
             includeUsage: false
         )
-        // 不带 temperature / max_tokens：部分模型（推理系/新模型）会因这两个参数直接 400
+        // 非流式一次往返（比 SSE 快数倍）；低温度保证改写稳定；限长防啰嗦
         let payload = ChatCompletionRequest(
             model: settings.model,
             messages: [
                 .system(Self.optimizerSystemPrompt),
                 APIPayloadMessage(role: "user", content: .text(raw))
             ],
-            stream: true,
-            temperature: nil,
-            max_tokens: nil,
+            stream: false,
+            temperature: 0.3,
+            max_tokens: 512,
             tools: nil,
             tool_choice: nil,
             stream_options: nil
         )
 
-        let accumulator = StreamAccumulator()
         do {
-            for try await chunk in client.streamChat(request: payload) {
-                if Task.isCancelled { break }
-                accumulator.ingest(chunk)
+            let optimized = try await client.completeChat(request: payload)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !optimized.isEmpty else {
+                undoableOptimizedText = nil
+                return "模型未返回优化结果，请重试"
             }
+            undoableOptimizedText = raw
+            draft = optimized
+            return nil
         } catch {
             undoableOptimizedText = nil
             return "优化失败：\(APIClient.describe(error))"
         }
-
-        let optimized = accumulator.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !optimized.isEmpty else {
-            undoableOptimizedText = nil
-            return "模型未返回优化结果，请重试"
-        }
-        undoableOptimizedText = raw
-        draft = optimized
-        return nil
     }
 
     /// 撤销最近一次优化
@@ -193,7 +190,7 @@ final class ChatViewModel: ObservableObject {
     /// 前台恢复检查：后台挂起导致的僵死流（长时间无数据）自动收尾，避免界面按钮被卡死
     func recoverIfNeeded() {
         guard isStreaming else { return }
-        guard Date().timeIntervalSince(lastChunkAt) > 75 else { return }
+        guard Date().timeIntervalSince(lastChunkAt) > 30 else { return }
         stop()
         if var conv = store.current, let last = conv.messages.last, last.role == .assistant {
             if last.text.isEmpty {
@@ -211,8 +208,20 @@ final class ChatViewModel: ObservableObject {
     private func beginBackgroundWork() {
         guard bgTask == .invalid else { return }
         bgTask = UIApplication.shared.beginBackgroundTask(withName: "NexusGeneration") { [weak self] in
-            self?.endBackgroundWork()
+            // 到期瞬间：先把最新快照落盘（防丢内容），再结束断言
+            Task { @MainActor in
+                self?.persistLatestSnapshot()
+                self?.endBackgroundWork()
+            }
         }
+    }
+
+    /// 后台断言到期：把最近一次会话快照立即写入磁盘（挂起前抢救数据）
+    private func persistLatestSnapshot() {
+        guard let conv = latestConversation else { return }
+        flush(conv)
+        store.persistToDisk(conv)
+        latestConversation = nil
     }
 
     private func endBackgroundWork() {
@@ -239,6 +248,7 @@ final class ChatViewModel: ObservableObject {
                 self.isStreaming = false
                 self.flush(conversation)                 // 立即刷出最终状态
                 self.store.persistToDisk(conversation)  // 最终落盘
+                self.latestConversation = nil
                 self.endBackgroundWork()
                 GenerationActivityCenter.shared.end()
             }
@@ -388,6 +398,7 @@ final class ChatViewModel: ObservableObject {
     /// 立即把会话快照写进内存（触发 UI 刷新）并安排落盘
     private func flush(_ conversation: Conversation) {
         lastFlushAt = Date()
+        latestConversation = conversation
         revision += 1
         store.update(conversation, persist: false)
         schedulePersist(conversation)

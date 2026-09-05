@@ -196,59 +196,65 @@ struct CodeBlockView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 代码块头部
-            HStack {
-                Text(language.isEmpty ? "code" : language)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Color.textTertiary)
+            // 代码块头部（浅色 WorkBuddy 风：语言名 + 预览/复制小按钮）
+            HStack(spacing: 10) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(Color.brand)
+                        .frame(width: 4.5, height: 4.5)
+                    Text(language.isEmpty ? "code" : language)
+                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Color.textSecondary)
+                }
                 Spacer()
 
                 if isHTML {
                     Button {
+                        Haptics.tap()
                         showPreview = true
                     } label: {
                         Label("预览", systemImage: "play.fill")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 10.5, weight: .semibold))
                             .foregroundStyle(Color.brand)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 6)
+                    .buttonStyle(PressableButtonStyle(scale: 0.9))
                 }
 
                 Button {
                     UIPasteboard.general.string = content
                     Haptics.success()
-                    withAnimation { copied = true }
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { copied = true }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                         withAnimation { copied = false }
                     }
                 } label: {
                     Label(copied ? "已复制" : "复制", systemImage: copied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(copied ? Color.brand : Color.textSecondary)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(copied ? Color.brand : Color.textTertiary)
+                        .contentTransition(.symbolEffect(.replace))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableButtonStyle(scale: 0.9))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.textPrimary.opacity(0.06))
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .background(Color.textPrimary.opacity(0.045))
 
-            // 代码主体
+            // 代码主体（浅底深字，横向滚动）
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(content)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Color(red: 0.92, green: 0.95, blue: 1.0))
+                    .foregroundStyle(Color.textPrimary)
                     .textSelection(.enabled)
-                    .padding(12)
+                    .padding(11)
             }
         }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(red: 0.02, green: 0.03, blue: 0.07))
+                .fill(Color.toolChipBG)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                .strokeBorder(Color.glassStroke, lineWidth: 1)
         )
         .sheet(isPresented: $showPreview) {
             HTMLPreviewSheet(title: "代码预览", html: content)

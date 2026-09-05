@@ -88,7 +88,7 @@
 		4C4C00000000000000000440 /* Embed App Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = PlugIns;
+			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
 				4C4C00000000000000000413 /* NexusWidget.appex in Embed App Extensions */,

@@ -85,10 +85,16 @@ struct SettingsView: View {
             Toggle("按钮触感反馈", isOn: $settings.hapticsEnabled)
                 .font(.system(size: 14))
                 .foregroundStyle(Color.textPrimary)
+            Toggle("生成时自动跟随", isOn: $settings.autoFollowEnabled)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.textPrimary)
+            Toggle("显示消息时间", isOn: $settings.showTimestamps)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.textPrimary)
         } header: {
             Text("外观")
         } footer: {
-            Text("主题色即时切换并全局生效；字号同步应用到消息正文与 Markdown；关闭 Markdown 可查看纯文本原文。")
+            Text("主题色即时切换并全局生效；字号同步应用到消息正文与 Markdown；关闭「生成时自动跟随」后可翻阅历史不被打断，右下角会出现回底按钮。")
         }
         .listRowBackground(Color.surfaceCard)
     }

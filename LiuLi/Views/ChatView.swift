@@ -1,10 +1,11 @@
 import SwiftUI
 import PhotosUI
 
-// MARK: - 聊天主界面（对标 DeepSeek：极简浅色）
-// 顶部：侧栏入口 + 标题 + 模式胶囊
+// MARK: - 聊天主界面（苹果现代极简）
+// 顶部：侧栏入口 + principal 标题 + 极简模式胶囊（fixedSize 防挤压）
 // 中部：消息流（用户右浅灰蓝气泡 / AI 左无气泡排版）
-// 底部：液态玻璃输入栏（+ 附件 / 玻璃文本框 / 品牌蓝发送键）
+// 底部：胶囊三件套（[+] 圆 · 长文本胶囊 · 发送圆），脱离玻璃大底板
+// 滚动：精确贴底检测 + 滞回；用户上滑即停跟随，玻璃回底箭头一键回底
 
 struct ChatView: View {
     @EnvironmentObject private var store: ConversationStore
@@ -21,12 +22,23 @@ struct ChatView: View {
     @State private var forceVisionBypass = false
     @State private var optimizeError: String?
     @State private var lastScrollAt = Date.distantPast
-    /// 用户是否停在消息底部（仅贴底时才自动跟随滚动，翻阅历史不被打断）
+
+    // MARK: 滚动状态（精确贴底检测 + 滞回，替代旧版粗略屏高判断）
+    /// 用户当前是否贴底（贴底才自动跟随新内容；上滑翻历史不被打断）
     @State private var pinnedToBottom = true
+    /// 滚动区可视高度（键盘/输入栏变化时同步，判断更准）
+    @State private var visibleScrollHeight: CGFloat = 0
+    /// 内容底缘在滚动坐标里的 Y（距底 = 该值 - 可视高度）
+    @State private var contentBottomY: CGFloat = 0
+
+    // MARK: 思考链展开状态（上提到本视图，避免 LazyVStack 回收导致折叠丢失）
+    @State private var userExpandedReasoning: Set<UUID> = []
+    @State private var userCollapsedReasoning: Set<UUID> = []
+
     @FocusState private var inputFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
 
-    /// 建议提问（DeepSeek 式简单文字胶囊，按模式给出）
+    /// 建议提问（简单文字胶囊，按模式给出）
     private var suggestions: [String] {
         store.current?.mode == .deep
         ? ["写一个个人主页", "读一下工作区文件", "写一个计算器"]
@@ -35,56 +47,63 @@ struct ChatView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                if !settings.isConfigured {
-                    notConfiguredBanner
+            ScrollViewReader { proxy in
+                VStack(spacing: 0) {
+                    if !settings.isConfigured {
+                        notConfiguredBanner
+                    }
+                    if store.current?.messages.isEmpty != false {
+                        // 空状态独立于滚动区：图标在可视区域正中央
+                        emptyState
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        messageList(proxy: proxy)
+                    }
                 }
-                if store.current?.messages.isEmpty != false {
-                    // 空状态独立于滚动区：图标在可视区域正中央
-                    emptyState
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    messageList
+                // 底部：回底箭头（贴底时隐藏）+ 胶囊输入三件套
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    VStack(spacing: 10) {
+                        if showScrollToBottomArrow {
+                            scrollToBottomArrow(proxy: proxy)
+                                .transition(.scale(scale: 0.5, anchor: .center).combined(with: .opacity))
+                        }
+                        inputBar
+                            .padding(.horizontal, 12)
+                            .padding(.top, 8)
+                            .padding(.bottom, 2)
+                    }
+                    .animation(.spring(response: 0.35, dampingFraction: 0.7),
+                               value: showScrollToBottomArrow)
+                }
+                .sheet(isPresented: $showConversationList) {
+                    ConversationListView()
+                }
+                .onChange(of: router.pendingPrompt) { _, newValue in
+                    if let prompt = newValue {
+                        inputText = prompt
+                        router.pendingPrompt = nil
+                        inputFocused = true
+                    }
+                }
+                // Siri 快捷指令：提问（自动填入输入框并聚焦）
+                .onReceive(NotificationCenter.default.publisher(for: .nexusSiriPrompt)) { note in
+                    if let prompt = note.object as? String, !prompt.isEmpty {
+                        inputText = prompt
+                        inputFocused = true
+                    }
+                }
+                // Siri 快捷指令：新建对话
+                .onReceive(NotificationCenter.default.publisher(for: .nexusSiriNewChat)) { _ in
+                    _ = store.create(mode: store.current?.mode ?? .lite)
+                }
+                // 回到前台：检查后台挂起导致的僵死流并自动收尾
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { vm.recoverIfNeeded() }
                 }
             }
-            // 悬浮液态玻璃输入胶囊：贴住 Tab 栏形成一体（消息从玻璃下方滚过折射）
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                inputBar
-                    .padding(.horizontal, 12)
-                    .padding(.top, 6)
-                    .padding(.bottom, 0)
-                    .liquidGlass(cornerRadius: 24)
-            }
-            .navigationTitle(store.current?.title ?? "对话")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .sheet(isPresented: $showConversationList) {
-                ConversationListView()
-            }
-            .onChange(of: router.pendingPrompt) { _, newValue in
-                if let prompt = newValue {
-                    inputText = prompt
-                    router.pendingPrompt = nil
-                    inputFocused = true
-                }
-            }
-            // Siri 快捷指令：提问（自动填入输入框并聚焦）
-            .onReceive(NotificationCenter.default.publisher(for: .nexusSiriPrompt)) { note in
-                if let prompt = note.object as? String, !prompt.isEmpty {
-                    inputText = prompt
-                    inputFocused = true
-                }
-            }
-            // Siri 快捷指令：新建对话
-            .onReceive(NotificationCenter.default.publisher(for: .nexusSiriNewChat)) { _ in
-                _ = store.create(mode: store.current?.mode ?? .lite)
-            }
-            // 回到前台：检查后台挂起导致的僵死流并自动收尾
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active { vm.recoverIfNeeded() }
-            }
         }
     }
 
@@ -107,72 +126,143 @@ struct ChatView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: 消息列表
+    // MARK: 消息列表（滚动核心）
 
-    /// 底部哨兵 PreferenceKey：判断是否贴底（翻阅历史时不再自动跳底）
-    private struct ChatAtBottomKey: PreferenceKey {
-        static var defaultValue: Bool = true
-        static func reduce(value: inout Bool, nextValue: () -> Bool) { value = nextValue() }
+    /// 内容底缘位置（滚动坐标系）
+    private struct ChatContentBottomKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
     }
 
-    private var messageList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 20) {
-                    ForEach(store.current?.messages ?? []) { message in
-                        MessageBubble(
-                            message: message,
-                            isStreaming: vm.isStreaming && message.id == store.current?.messages.last?.id,
-                            isLatestAssistant: isLatestAssistant(message),
-                            onRegenerate: { vm.regenerate() }
-                        )
-                        .id(message.id)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .top)),
-                            removal: .opacity))
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, 10)
-                .padding(.bottom, 8)
-                .animation(.spring(response: 0.35, dampingFraction: 0.9),
-                           value: store.current?.messages.count)
+    /// 滚动区自身可视高度
+    private struct ChatVisibleHeightKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+    }
 
-                // 底部哨兵：贴底检测（距底 < 100pt 视为贴底）
-                GeometryReader { geo in
-                    Color.clear
-                        .preference(
-                            key: ChatAtBottomKey.self,
-                            value: geo.frame(in: .named("chatScroll")).minY
-                                < UIScreen.main.bounds.height - 100)
+    private func messageList(proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 18) {
+                ForEach(store.current?.messages ?? []) { message in
+                    MessageBubble(
+                        message: message,
+                        isStreaming: vm.isStreaming && message.id == store.current?.messages.last?.id,
+                        isLatestAssistant: isLatestAssistant(message),
+                        reasoningExpanded: reasoningBinding(message),
+                        showTimestamp: settings.showTimestamps,
+                        onRegenerate: {
+                            // 重写：回到贴底并跟随新一轮生成位置
+                            pinnedToBottom = true
+                            vm.regenerate()
+                        }
+                    )
+                    .id(message.id)
+                    .transition(.opacity)
                 }
-                .frame(height: 1)
             }
-            .coordinateSpace(name: "chatScroll")
-            .onPreferenceChange(ChatAtBottomKey.self) { pinnedToBottom = $0 }
-            .onChange(of: store.current?.messages.count) { _, newCount in
-                guard pinnedToBottom, let count = newCount, count > 0,
-                      let last = store.current?.messages.last else { return }
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(last.id, anchor: .bottom)
-                }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+
+            // 底部哨兵：内容底缘 Y（滚动坐标系内的绝对位置）
+            GeometryReader { geo in
+                Color.clear
+                    .preference(
+                        key: ChatContentBottomKey.self,
+                        value: geo.frame(in: .named("chatScroll")).minY
+                    )
             }
-            // 流式跟随：由 VM 的节流 revision 信号驱动（~8 次/秒），此处再限 ~4 次/秒
-            .onChange(of: vm.revision) { _, _ in
-                guard vm.isStreaming, pinnedToBottom,
-                      let last = store.current?.messages.last else { return }
-                guard Date().timeIntervalSince(lastScrollAt) > 0.25 else { return }
-                lastScrollAt = Date()
+            .frame(height: 1)
+        }
+        .coordinateSpace(name: "chatScroll")
+        .background(
+            // 滚动区自身高度：键盘弹出 / 输入栏增高时同步收缩，贴底判断不受屏高误差影响
+            GeometryReader { geo in
+                Color.clear.preference(key: ChatVisibleHeightKey.self, value: geo.size.height)
+            }
+        )
+        .onPreferenceChange(ChatContentBottomKey.self) { newValue in
+            contentBottomY = newValue
+            syncPinnedState()
+        }
+        .onPreferenceChange(ChatVisibleHeightKey.self) { newValue in
+            visibleScrollHeight = newValue
+            syncPinnedState()
+        }
+        // 新消息插入：贴底时以弹簧动画跟随（含用户刚发送 / 重写的场景）
+        .onChange(of: store.current?.messages.count) { _, newCount in
+            guard pinnedToBottom, let count = newCount, count > 0,
+                  let last = store.current?.messages.last else { return }
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.9)) {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
-            .onChange(of: store.currentID) { _, _ in
-                pinnedToBottom = true
-                if let last = store.current?.messages.last {
+        }
+        // 流式跟随：由 VM 的节流 revision 信号驱动（~8 次/秒），此处再限 ~4 次/秒；
+        // 用户上滑脱离贴底后立即停止跟随（由 syncPinnedState 持续维护）
+        .onChange(of: vm.revision) { _, _ in
+            guard vm.isStreaming, settings.autoFollowEnabled, pinnedToBottom,
+                  let last = store.current?.messages.last else { return }
+            guard Date().timeIntervalSince(lastScrollAt) > 0.25 else { return }
+            lastScrollAt = Date()
+            proxy.scrollTo(last.id, anchor: .bottom)
+        }
+        // 切换会话：重置贴底状态并直接跳底（无动画，避免跨会话滚动轨迹）
+        .onChange(of: store.currentID) { _, _ in
+            contentBottomY = 0
+            pinnedToBottom = true
+            if let last = store.current?.messages.last {
+                DispatchQueue.main.async {
                     proxy.scrollTo(last.id, anchor: .bottom)
                 }
             }
-            .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.immediately)
+        }
+        .defaultScrollAnchor(.bottom)
+        .scrollDismissesKeyboard(.immediately)
+    }
+
+    /// 贴底检测（滞回防抖）：距底 > 64pt 视为脱离；贴回 < 32pt 视为恢复
+    private func syncPinnedState() {
+        let distance = contentBottomY - visibleScrollHeight
+        if distance > 64 {
+            if pinnedToBottom { pinnedToBottom = false }
+        } else if distance < 32 {
+            if !pinnedToBottom { pinnedToBottom = true }
+        }
+    }
+
+    /// 是否展示「回到底部」玻璃箭头（阈值更高，与贴底判定形成滞回区，避免闪烁）
+    private var showScrollToBottomArrow: Bool {
+        guard store.current?.messages.isEmpty == false else { return false }
+        return contentBottomY - visibleScrollHeight > 120
+    }
+
+    /// 回底箭头：玻璃圆 + 下箭头，一键弹回底部（弹簧物理回弹）
+    private func scrollToBottomArrow(proxy: ScrollViewProxy) -> some View {
+        HStack {
+            Spacer()
+            Button {
+                Haptics.tap()
+                scrollToBottom(proxy)
+            } label: {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.textSecondary)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(.ultraThinMaterial))
+                    .overlay(Circle().strokeBorder(Color.glassStroke, lineWidth: 1))
+                    .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+            }
+            .buttonStyle(PressableButtonStyle(scale: 0.86))
+            .padding(.trailing, 6)
+        }
+    }
+
+    /// 弹回底部：带阻尼的弹簧（先快后缓的自然回弹，非生硬 easeOut）
+    private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        guard let last = store.current?.messages.last else { return }
+        pinnedToBottom = true
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+            proxy.scrollTo(last.id, anchor: .bottom)
         }
     }
 
@@ -187,7 +277,28 @@ struct ChatView: View {
         return false
     }
 
-    // MARK: 空状态（DeepSeek 式：logo + 一句问候 + 简单建议胶囊；整体在可视区居中）
+    // MARK: 思考链展开绑定（状态存于本视图，LazyVStack 回收不丢失）
+
+    private func reasoningBinding(_ message: ChatMessage) -> Binding<Bool> {
+        Binding(
+            get: {
+                if userExpandedReasoning.contains(message.id) { return true }
+                if userCollapsedReasoning.contains(message.id) { return false }
+                return settings.defaultExpandReasoning
+            },
+            set: { expanded in
+                if expanded {
+                    userExpandedReasoning.insert(message.id)
+                    userCollapsedReasoning.remove(message.id)
+                } else {
+                    userCollapsedReasoning.insert(message.id)
+                    userExpandedReasoning.remove(message.id)
+                }
+            }
+        )
+    }
+
+    // MARK: 空状态
 
     private var emptyState: some View {
         VStack(spacing: 0) {
@@ -247,7 +358,7 @@ struct ChatView: View {
         }
     }
 
-    // MARK: 工具栏
+    // MARK: 工具栏（principal 标题 + 极简模式胶囊）
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
@@ -262,12 +373,25 @@ struct ChatView: View {
             }
         }
 
+        // principal 标题：现代极简（低调灰、可截断，绝不挤压两侧按钮）
+        ToolbarItem(placement: .principal) {
+            HStack(spacing: 6) {
+                Text(store.current?.title ?? "对话")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: 160)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+
         ToolbarItem(placement: .topBarTrailing) {
-            // 模式切换（快速/深度，随时可点；下一次发送即生效；切换即时高亮反馈）
+            // 模式胶囊：短名 + fixedSize，长标题下也不会被压缩
             Button {
                 guard var conv = store.current else { return }
                 Haptics.tap()
-                withAnimation(.easeInOut(duration: 0.18)) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     conv.mode = conv.mode == .lite ? .deep : .lite
                     store.update(conv)
                 }
@@ -275,26 +399,27 @@ struct ChatView: View {
                 HStack(spacing: 5) {
                     Circle()
                         .fill(Color.brand)
-                        .frame(width: 5, height: 5)
-                    Text((store.current?.mode ?? .lite).displayName)
-                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 4.5, height: 4.5)
+                    Text((store.current?.mode ?? .lite).shortName)
+                        .font(.system(size: 12.5, weight: .medium))
                         .contentTransition(.opacity)
                 }
                 .foregroundStyle(Color.brand)
-                .padding(.horizontal, 11)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(Capsule().fill(Color.brandSoft))
                 .overlay(Capsule().strokeBorder(Color.brand.opacity(0.14), lineWidth: 1))
+                .fixedSize()
             }
             .buttonStyle(PressableButtonStyle(scale: 0.94))
             .animation(.easeInOut(duration: 0.18), value: store.current?.mode)
         }
     }
 
-    // MARK: 输入栏（液态玻璃：+ 附件 | 玻璃文本框 | 品牌蓝发送键）
+    // MARK: 输入栏（胶囊三件套：[+] 圆 · 长文本胶囊 · 发送圆）
 
     private var inputBar: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 7) {
             // 提示词优化状态条（优化中 / 已优化可撤销 / 失败提示）
             if settings.promptOptimizerEnabled,
                vm.isOptimizing || vm.undoableOptimizedText != nil || optimizeError != nil {
@@ -337,11 +462,11 @@ struct ChatView: View {
                 .frame(height: 68)
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
-                // 「+」附件（直接弹出相册选图；勿嵌在 Menu 里——Menu 会导致选择器弹不出、点击无响应）
+            // 三件套：左 [+] 圆 · 中 长胶囊文本框 · 右 发送/停止圆
+            HStack(alignment: .center, spacing: 8) {
                 PhotosPicker(selection: $photoSelection, maxSelectionCount: 3, matching: .images) {
                     Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(Color.textSecondary)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(Color.surfaceCard))
@@ -350,7 +475,6 @@ struct ChatView: View {
                 .buttonStyle(PressableButtonStyle(scale: 0.88))
                 .disabled(vm.isStreaming)
 
-                // 输入框（玻璃胶囊内的实底白框 + 右下魔法棒）
                 ZStack(alignment: .bottomTrailing) {
                     TextField(vm.isStreaming ? "生成中…" : "有问题，尽管问", text: $inputText, axis: .vertical)
                         .textFieldStyle(.plain)
@@ -358,9 +482,9 @@ struct ChatView: View {
                         .focused($inputFocused)
                         .font(.system(size: settings.chatFontSize + 0.5))
                         .foregroundStyle(Color.textPrimary)
-                        .padding(.leading, 14)
-                        .padding(.trailing, showOptimizeButton ? 40 : 14)
-                        .padding(.vertical, 12)
+                        .padding(.leading, 15)
+                        .padding(.trailing, showOptimizeButton ? 42 : 15)
+                        .padding(.vertical, 11)
                         .submitLabel(.send)
                         .onSubmit { performSend() }
 
@@ -368,26 +492,16 @@ struct ChatView: View {
                         optimizeButton
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.surfaceCard)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(Color.glassStroke, lineWidth: 1)
-                )
+                .background(Capsule().fill(Color.surfaceCard))
+                .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
 
-                // 发送 / 停止
                 sendButton
             }
-            .padding(.horizontal, 10)
-            .padding(.top, 2)
 
             Text("内容由 AI 生成，请注意甄别")
                 .font(.system(size: 10))
                 .foregroundStyle(Color.textTertiary.opacity(0.7))
-                .padding(.bottom, 2)
-                .padding(.top, 6)
+                .padding(.bottom, 1)
         }
         .onChange(of: photoSelection) { _, items in
             loadPickedImages(items)
@@ -407,7 +521,7 @@ struct ChatView: View {
         }
     }
 
-    // MARK: 提示词优化（输入框右下角魔法棒）
+    // MARK: 提示词优化（输入胶囊右下角魔法棒）
 
     private var showOptimizeButton: Bool {
         settings.promptOptimizerEnabled && !vm.isStreaming &&
@@ -435,7 +549,7 @@ struct ChatView: View {
         .buttonStyle(PressableButtonStyle(scale: 0.85))
         .disabled(vm.isOptimizing)
         .padding(.trailing, 6)
-        .padding(.bottom, 6)
+        .padding(.bottom, 5)
     }
 
     private var optimizeStatusBar: some View {
@@ -506,41 +620,45 @@ struct ChatView: View {
         }
     }
 
+    // MARK: 发送 / 停止（同一位置平滑过渡，停止态呼吸感）
+
     @ViewBuilder
     private var sendButton: some View {
-        if vm.isStreaming {
-            // 停止（DeepSeek 式：白圆黑方块）
-            Button {
-                Haptics.tap()
+        Button {
+            Haptics.tap()
+            if vm.isStreaming {
                 vm.stop()
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: 36, height: 36)
-                        .overlay(Circle().strokeBorder(Color.glassStroke, lineWidth: 1))
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.textPrimary)
-                }
+            } else {
+                performSend()
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.88))
-        } else {
-            // 发送（主题色实心圆）
-            Button(action: performSend) {
-                ZStack {
-                    Circle()
-                        .fill(canSendInput ? Color.brand : Color.textTertiary.opacity(0.22))
-                        .frame(width: 36, height: 36)
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(vm.isStreaming
+                          ? Color.surfaceCard
+                          : (canSendInput ? Color.brand : Color.textTertiary.opacity(0.22)))
+                    .frame(width: 36, height: 36)
+                    .overlay(Circle().strokeBorder(
+                        vm.isStreaming ? Color.glassStroke : .clear, lineWidth: 1))
+
+                if vm.isStreaming {
+                    // 停止图标：圆角小方块（停止态的标志性形状）
+                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                        .fill(Color.textPrimary)
+                        .frame(width: 12, height: 12)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                } else {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color.white)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
                 }
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.86))
-            .disabled(!canSendInput)
-            .animation(.easeInOut(duration: 0.15), value: canSendInput)
         }
+        .buttonStyle(PressableButtonStyle(scale: 0.86))
+        .disabled(!vm.isStreaming && !canSendInput)
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: vm.isStreaming)
+        .animation(.easeInOut(duration: 0.15), value: canSendInput)
     }
 
     private var canSendInput: Bool {

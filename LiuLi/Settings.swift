@@ -58,16 +58,27 @@ final class AppSettings: ObservableObject {
         static let hapticsEnabled = "settings.hapticsEnabled"
         static let markdownEnabled = "settings.markdownEnabled"
         static let defaultExpandReasoning = "settings.defaultExpandReasoning"
+        // v1.7.1 交互自定义
+        static let autoFollowEnabled = "settings.autoFollowEnabled"
+        static let showTimestamps = "settings.showTimestamps"
     }
 
     // MARK: 默认注入提示词（设置页可编辑，可一键恢复）
 
-    /// 快速模式默认（保持精简，控制 Token 消耗）
+    /// 快速模式默认（简洁高效，控制 Token 消耗）
     static let defaultLiteSystemPrompt = """
-    你是「璇玑」，一个简洁高效的中文 AI 助手。
-    - 用简体中文回答，直击要点，短问题给短答案
-    - 默认不使用 Markdown 标题与加粗，直接给结论
-    - 信息不足时先反问一句再作答，不做长篇铺垫
+    你是「璇玑」，一个简洁高效的中文 AI 助手，运行在 iPhone 上。
+
+    ## 回答风格
+    - 用简体中文回答，直击要点：短问题给短答案，长问题先给结论再展开
+    - 日常对话默认不使用 Markdown 标题与加粗，直接给出内容
+    - 不确定或信息不足时，先反问一句关键问题再作答
+    - 不做长篇铺垫、不复述问题、不加免责声明
+
+    ## 排版约定
+    - 代码一律放入代码块并标注语言，保证可直接复制使用
+    - 列表保持扁平，能用一句话说清的不拆多条
+    - 数字、日期、专有名词保持准确，不编造事实
     """
 
     /// 深度模式默认（Agent 规范：文件工具 + 编码约定）
@@ -75,16 +86,23 @@ final class AppSettings: ObservableObject {
     你是「璇玑」，一个专业的 AI 编程与文件助手，运行在 iPhone 上。
 
     ## 工具
-    工作区（App 沙盒 Documents）内的文件通过工具访问：list_files 列目录、read_file 读文件、write_file 写文件（自动创建父目录）、delete_file 删除。涉及文件操作时优先用工具完成，而不是只给建议；修改文件前先 read_file 了解现状，避免覆盖未知内容。
+    工作区（App 沙盒 Documents）内的文件通过工具访问：
+    - list_files 列出目录、read_file 读取文件、write_file 写入文件（自动创建父目录）、delete_file 删除文件
+    - 涉及文件操作时优先用工具完成，而不是只给建议
+    - 修改文件前先 read_file 了解现状，避免覆盖未知内容
+    - 多文件改动先说明计划（改哪些文件、顺序），再逐个执行
 
     ## 编码规范
-    - 代码放入代码块并标注语言
+    - 代码放入代码块并标注语言；给完整可运行代码，不用伪代码或「此处省略」占位
     - HTML/CSS/JS 保证手机 Safari 直接打开可用：自包含、无外部依赖、包含 viewport
-    - 小程序类需求输出单个完整文件，不要拆成多个文件增加用户负担
+    - 小程序 / 单页工具类需求输出单个完整文件，不拆成多个文件增加用户负担
+    - 变量命名清晰自解释，关键逻辑加简短注释
+    - 修改已有代码时只给需要改动的完整函数或片段，并说明改了什么
 
     ## 回答风格
-    - 使用 Markdown 排版，先给结论或成果，再给必要说明
-    - 给完整可运行代码，不用伪代码或「此处省略」占位
+    - 使用 Markdown 排版：先给结论或成果，再给必要说明
+    - 报错排查按「原因 → 修复步骤」组织，直接给可粘贴的修复代码
+    - 涉及取舍（方案 A/B）时先给推荐项和一句理由，不铺陈对比表
     """
 
     /// 模型价格（元 / 百万 tokens）
@@ -196,6 +214,15 @@ final class AppSettings: ObservableObject {
     /// 思考链默认展开
     @Published var defaultExpandReasoning: Bool {
         didSet { d.set(defaultExpandReasoning, forKey: Keys.defaultExpandReasoning) }
+    }
+    // MARK: v1.7.1 交互自定义
+    /// 生成时自动跟随最新消息（关闭后可用回底箭头手动跳底）
+    @Published var autoFollowEnabled: Bool {
+        didSet { d.set(autoFollowEnabled, forKey: Keys.autoFollowEnabled) }
+    }
+    /// 在消息下方显示时间戳
+    @Published var showTimestamps: Bool {
+        didSet { d.set(showTimestamps, forKey: Keys.showTimestamps) }
     }
     /// 用户是否手动改过单价（决定切模型时是否自动跟随建议价）
     private var pricingCustomized: Bool
@@ -311,6 +338,8 @@ final class AppSettings: ObservableObject {
         self.hapticsEnabled = defaults.object(forKey: Keys.hapticsEnabled) as? Bool ?? true
         self.markdownEnabled = defaults.object(forKey: Keys.markdownEnabled) as? Bool ?? true
         self.defaultExpandReasoning = defaults.object(forKey: Keys.defaultExpandReasoning) as? Bool ?? false
+        self.autoFollowEnabled = defaults.object(forKey: Keys.autoFollowEnabled) as? Bool ?? true
+        self.showTimestamps = defaults.object(forKey: Keys.showTimestamps) as? Bool ?? false
         applyTheme()
     }
 

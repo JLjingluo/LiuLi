@@ -586,7 +586,7 @@ struct ChatView: View {
                 }
                 Button {
                     optimizeError = nil
-                    vm.undoableOptimizedText = nil
+                    vm.dismissOptimizeState()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))

@@ -5,6 +5,9 @@ on:
   push:
     branches: [main, master]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     # macos-26 带 Xcode 26（iOS 26 SDK，原生 Liquid Glass）
@@ -50,3 +53,21 @@ jobs:
           name: Nexus-unsigned-ipa
           path: build/Nexus-unsigned.ipa
           retention-days: 30
+
+      - name: 读取版本号
+        id: ver
+        run: |
+          V=$(grep -m1 'MARKETING_VERSION = ' LiuLi.xcodeproj/project.pbxproj | sed -E 's/.*= *"?([0-9.]+)"?;.*$/\1/')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: 发布 Release（直连下载链接）
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: Nexus v${{ steps.ver.outputs.version }} · 未签名 IPA
+          body: |
+            ## 直连下载
+            `Nexus-unsigned.ipa`（未签名，需用 eSign / SideStore / AltStore / Sideloadly 等签名后安装）
+          files: build/Nexus-unsigned.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

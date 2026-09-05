@@ -1,11 +1,15 @@
 import SwiftUI
 import PhotosUI
 
-// MARK: - 聊天主界面（苹果现代极简）
-// 顶部：侧栏入口 + principal 标题 + 极简模式胶囊（fixedSize 防挤压）
-// 中部：消息流（用户右浅灰蓝气泡 / AI 左无气泡排版）
-// 底部：胶囊三件套（[+] 圆 · 长文本胶囊 · 发送圆），脱离玻璃大底板
-// 滚动：精确贴底检测 + 滞回；用户上滑即停跟随，玻璃回底箭头一键回底
+// MARK: - 聊天主界面 v2（液态玻璃版）
+// 顶部：侧栏入口 + 低调标题 + 模式胶囊
+// 中部：消息流（用户玻璃气泡 / AI 无气泡排版）
+// 底部：三件独立玻璃胶囊（[+] 圆 · 长文本胶囊 · 发送圆），内容从间隙间折射而过
+//
+// 稳定性设计：
+// - 输入框直绑 vm.draft（单一数据源，彻底消除双状态同步 bug）
+// - 贴底检测双 PreferenceKey + 64/32pt 滞回（用户滑动不被劫持）
+// - 思考链展开状态由本视图持有（LazyVStack 回收不丢失）
 
 struct ChatView: View {
     @EnvironmentObject private var store: ConversationStore
@@ -13,8 +17,6 @@ struct ChatView: View {
     @EnvironmentObject private var router: AppRouter
     @StateObject private var vm = ChatViewModel(store: .shared, settings: .shared)
 
-    // 输入框本地状态：发送后立即清空
-    @State private var inputText = ""
     @State private var showConversationList = false
     @State private var photoSelection: [PhotosPickerItem] = []
     @State private var stashedItems: [PhotosPickerItem] = []
@@ -23,22 +25,22 @@ struct ChatView: View {
     @State private var optimizeError: String?
     @State private var lastScrollAt = Date.distantPast
 
-    // MARK: 滚动状态（精确贴底检测 + 滞回，替代旧版粗略屏高判断）
-    /// 用户当前是否贴底（贴底才自动跟随新内容；上滑翻历史不被打断）
-    @State private var pinnedToBottom = true
-    /// 滚动区可视高度（键盘/输入栏变化时同步，判断更准）
-    @State private var visibleScrollHeight: CGFloat = 0
-    /// 内容底缘在滚动坐标里的 Y（距底 = 该值 - 可视高度）
+    // 滚动状态机
+    /// 内容底缘 Y（滚动坐标系内的绝对位置）
     @State private var contentBottomY: CGFloat = 0
+    /// 滚动区自身可视高度（键盘弹出 / 输入栏增高时同步收缩）
+    @State private var visibleScrollHeight: CGFloat = 0
+    /// 用户是否贴在底部（仅贴底时才自动跟随，翻阅历史不被打断）
+    @State private var pinnedToBottom = true
 
-    // MARK: 思考链展开状态（上提到本视图，避免 LazyVStack 回收导致折叠丢失）
+    // 思考链展开状态（用户显式操作记录，覆盖默认值）
     @State private var userExpandedReasoning: Set<UUID> = []
     @State private var userCollapsedReasoning: Set<UUID> = []
 
     @FocusState private var inputFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
 
-    /// 建议提问（简单文字胶囊，按模式给出）
+    /// 建议提问（按模式给出）
     private var suggestions: [String] {
         store.current?.mode == .deep
         ? ["写一个个人主页", "读一下工作区文件", "写一个计算器"]
@@ -60,7 +62,7 @@ struct ChatView: View {
                         messageList(proxy: proxy)
                     }
                 }
-                // 底部：回底箭头（贴底时隐藏）+ 胶囊输入三件套
+                // 底部：玻璃回底箭头（贴底时隐藏）+ 三件玻璃胶囊输入组
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     VStack(spacing: 10) {
                         if showScrollToBottomArrow {
@@ -70,17 +72,22 @@ struct ChatView: View {
                         inputBar
                             .padding(.horizontal, 12)
                             .padding(.top, 8)
-                            .padding(.bottom, 2)
+                            .padding(.bottom, 4)
                     }
                     .animation(.spring(response: 0.35, dampingFraction: 0.7),
                                value: showScrollToBottomArrow)
                 }
+                .navigationTitle(store.current?.title ?? "对话")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { toolbarContent }
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
                 .sheet(isPresented: $showConversationList) {
                     ConversationListView()
                 }
                 .onChange(of: router.pendingPrompt) { _, newValue in
                     if let prompt = newValue {
-                        inputText = prompt
+                        vm.draft = prompt
                         router.pendingPrompt = nil
                         inputFocused = true
                     }
@@ -88,7 +95,7 @@ struct ChatView: View {
                 // Siri 快捷指令：提问（自动填入输入框并聚焦）
                 .onReceive(NotificationCenter.default.publisher(for: .nexusSiriPrompt)) { note in
                     if let prompt = note.object as? String, !prompt.isEmpty {
-                        inputText = prompt
+                        vm.draft = prompt
                         inputFocused = true
                     }
                 }
@@ -101,13 +108,10 @@ struct ChatView: View {
                     if phase == .active { vm.recoverIfNeeded() }
                 }
             }
-            .toolbar { toolbarContent }
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         }
     }
 
-    // MARK: 未配置提示
+    // MARK: 未配置提示（玻璃横幅）
 
     private var notConfiguredBanner: some View {
         Button {
@@ -121,9 +125,11 @@ struct ChatView: View {
             .foregroundStyle(Color.errorText)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
-            .background(.ultraThinMaterial)
+            .liquidGlass(cornerRadius: 14)
         }
         .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
     }
 
     // MARK: 消息列表（滚动核心）
@@ -236,7 +242,7 @@ struct ChatView: View {
         return contentBottomY - visibleScrollHeight > 120
     }
 
-    /// 回底箭头：玻璃圆 + 下箭头，一键弹回底部（弹簧物理回弹）
+    /// 回底箭头：独立玻璃圆 + 下箭头，一键弹回底部（弹簧物理回弹）
     private func scrollToBottomArrow(proxy: ScrollViewProxy) -> some View {
         HStack {
             Spacer()
@@ -248,9 +254,7 @@ struct ChatView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.textSecondary)
                     .frame(width: 38, height: 38)
-                    .background(Circle().fill(.ultraThinMaterial))
-                    .overlay(Circle().strokeBorder(Color.glassStroke, lineWidth: 1))
-                    .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+                    .liquidGlass(cornerRadius: 19, interactive: true)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.86))
             .padding(.trailing, 6)
@@ -302,16 +306,16 @@ struct ChatView: View {
 
     private var emptyState: some View {
         VStack(spacing: 0) {
-            // logo：主题色圆角方 + 白 N（液态玻璃徽章感）
+            // logo：品牌渐变圆角方 + 白 N
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(settings.theme.brand)
+                    .fill(Color.brandGradient)
                 Text("N")
                     .font(.system(size: 25, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.white)
             }
             .frame(width: 52, height: 52)
-            .shadow(color: settings.theme.brand.opacity(0.35), radius: 14, y: 6)
+            .shadow(color: Color.brand.opacity(0.35), radius: 14, y: 6)
 
             Text("你好，我是 \(AppInfo.displayName)")
                 .font(.system(size: 18, weight: .semibold))
@@ -323,13 +327,13 @@ struct ChatView: View {
                 .foregroundStyle(Color.textTertiary)
                 .padding(.top, 6)
 
-            // 建议胶囊（浅灰底描边，点击填入输入框）
+            // 建议胶囊（玻璃质感，点击填入输入框）
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(suggestions, id: \.self) { s in
                         Button {
                             Haptics.tap()
-                            inputText = s
+                            vm.draft = s
                             inputFocused = true
                         } label: {
                             Text(s)
@@ -337,8 +341,7 @@ struct ChatView: View {
                                 .foregroundStyle(Color.textSecondary)
                                 .padding(.horizontal, 13)
                                 .padding(.vertical, 7)
-                                .background(Capsule().fill(Color.surfaceCard))
-                                .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
+                                .liquidGlass(cornerRadius: 16)
                         }
                         .buttonStyle(PressableButtonStyle(scale: 0.94))
                     }
@@ -358,7 +361,7 @@ struct ChatView: View {
         }
     }
 
-    // MARK: 工具栏（principal 标题 + 极简模式胶囊）
+    // MARK: 工具栏（principal 低调标题 + 模式胶囊）
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
@@ -375,15 +378,13 @@ struct ChatView: View {
 
         // principal 标题：现代极简（低调灰、可截断，绝不挤压两侧按钮）
         ToolbarItem(placement: .principal) {
-            HStack(spacing: 6) {
-                Text(store.current?.title ?? "对话")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            .frame(maxWidth: 160)
-            .fixedSize(horizontal: false, vertical: true)
+            Text(store.current?.title ?? "对话")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: 160)
+                .fixedSize(horizontal: false, vertical: true)
         }
 
         ToolbarItem(placement: .topBarTrailing) {
@@ -416,7 +417,7 @@ struct ChatView: View {
         }
     }
 
-    // MARK: 输入栏（胶囊三件套：[+] 圆 · 长文本胶囊 · 发送圆）
+    // MARK: 输入栏（三件独立玻璃胶囊：[+] 圆 · 长文本胶囊 · 发送圆）
 
     private var inputBar: some View {
         VStack(spacing: 7) {
@@ -462,21 +463,21 @@ struct ChatView: View {
                 .frame(height: 68)
             }
 
-            // 三件套：左 [+] 圆 · 中 长胶囊文本框 · 右 发送/停止圆
-            HStack(alignment: .center, spacing: 8) {
+            // 三件套：左 [+] 玻璃圆 · 中 玻璃长胶囊 · 右 发送/停止圆
+            HStack(alignment: .bottom, spacing: 8) {
                 PhotosPicker(selection: $photoSelection, maxSelectionCount: 3, matching: .images) {
                     Image(systemName: "plus")
                         .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(Color.textSecondary)
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.surfaceCard))
-                        .overlay(Circle().strokeBorder(Color.glassStroke, lineWidth: 1))
+                        .liquidGlass(cornerRadius: 18, interactive: true)
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.88))
                 .disabled(vm.isStreaming)
 
                 ZStack(alignment: .bottomTrailing) {
-                    TextField(vm.isStreaming ? "生成中…" : "有问题，尽管问", text: $inputText, axis: .vertical)
+                    // 输入胶囊直绑 vm.draft（单一数据源，无同步 bug）
+                    TextField(vm.isStreaming ? "生成中…" : "有问题，尽管问", text: $vm.draft, axis: .vertical)
                         .textFieldStyle(.plain)
                         .lineLimit(1...5)
                         .focused($inputFocused)
@@ -486,14 +487,15 @@ struct ChatView: View {
                         .padding(.trailing, showOptimizeButton ? 42 : 15)
                         .padding(.vertical, 11)
                         .submitLabel(.send)
-                        .onSubmit { performSend() }
+                        .onSubmit {
+                            if settings.enterToSend { performSend() }
+                        }
 
                     if showOptimizeButton {
                         optimizeButton
                     }
                 }
-                .background(Capsule().fill(Color.surfaceCard))
-                .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
+                .liquidGlass(cornerRadius: 19, interactive: true, tinted: true)
 
                 sendButton
             }
@@ -525,7 +527,7 @@ struct ChatView: View {
 
     private var showOptimizeButton: Bool {
         settings.promptOptimizerEnabled && !vm.isStreaming &&
-        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !vm.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     @ViewBuilder
@@ -577,7 +579,6 @@ struct ChatView: View {
                     Button("撤销") {
                         Haptics.tap()
                         vm.undoOptimize()
-                        inputText = vm.draft
                     }
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.brand)
@@ -597,30 +598,22 @@ struct ChatView: View {
         .foregroundStyle(Color.textSecondary)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(
-            Capsule().fill(Color.surfaceCard)
-        )
-        .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
+        .liquidGlass(cornerRadius: 16)
         .padding(.horizontal, 4)
     }
 
     private func performOptimize() {
         guard !vm.isOptimizing else { return }
-        let text = inputText
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !vm.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         optimizeError = nil
         Task {
-            vm.draft = text
             if let error = await vm.optimizeDraft() {
-                // 未配置 / 网络失败等原因，直接在状态条展示中文提示
                 optimizeError = error
-            } else {
-                inputText = vm.draft
             }
         }
     }
 
-    // MARK: 发送 / 停止（同一位置平滑过渡，停止态呼吸感）
+    // MARK: 发送 / 停止（同一位置平滑过渡）
 
     @ViewBuilder
     private var sendButton: some View {
@@ -633,21 +626,30 @@ struct ChatView: View {
             }
         } label: {
             ZStack {
-                Circle()
-                    .fill(vm.isStreaming
-                          ? Color.surfaceCard
-                          : (canSendInput ? Color.brand : Color.textTertiary.opacity(0.22)))
-                    .frame(width: 36, height: 36)
-                    .overlay(Circle().strokeBorder(
-                        vm.isStreaming ? Color.glassStroke : .clear, lineWidth: 1))
-
                 if vm.isStreaming {
-                    // 停止图标：圆角小方块（停止态的标志性形状）
+                    // 停止态：玻璃圆 + 深色小方块
+                    Circle()
+                        .fill(Color.surfaceCard)
+                        .frame(width: 36, height: 36)
+                        .overlay(Circle().strokeBorder(Color.glassStroke, lineWidth: 1))
                     RoundedRectangle(cornerRadius: 3.5, style: .continuous)
                         .fill(Color.textPrimary)
                         .frame(width: 12, height: 12)
                         .transition(.scale(scale: 0.5).combined(with: .opacity))
                 } else {
+                    // 发送态：品牌渐变圆 + 上箭头（顶部高光做玻璃质感）
+                    ZStack {
+                        Circle().fill(Color.brandGradient)
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .white.opacity(0.35), location: 0),
+                                        .init(color: .white.opacity(0.0), location: 0.45)
+                                    ],
+                                    startPoint: .top, endPoint: .bottom))
+                    }
+                    .frame(width: 36, height: 36)
                     Image(systemName: "arrow.up")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color.white)
@@ -663,21 +665,19 @@ struct ChatView: View {
 
     private var canSendInput: Bool {
         !vm.isStreaming && settings.isConfigured &&
-        (!inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !vm.pendingImages.isEmpty)
+        (!vm.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !vm.pendingImages.isEmpty)
     }
 
-    /// 发送：同步本地输入到 VM → 发送 → 立即清空输入框（贴底跟随新消息）
+    /// 发送：直绑 draft 后无需任何状态同步，发送即贴底跟随
     private func performSend() {
         guard !vm.isStreaming else { return }
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !vm.pendingImages.isEmpty else { return }
         guard settings.isConfigured else { return }
+        guard canSendInput else { return }
 
         Haptics.success()
         pinnedToBottom = true
-        vm.draft = inputText
         vm.send()
-        inputText = ""
+        inputFocused = false
     }
 
     // MARK: 图片选择处理

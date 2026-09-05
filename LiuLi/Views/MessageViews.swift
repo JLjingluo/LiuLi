@@ -1,9 +1,9 @@
 import SwiftUI
 
-// MARK: - 消息视图（对标 DeepSeek 布局）
-// - 用户：右侧浅灰蓝气泡（深色文字，非彩色）
+// MARK: - 消息视图 v2（液态玻璃版）
+// - 用户：右侧玻璃气泡（品牌微染）或纯色气泡（设置可选）
 // - AI：左侧小 logo 头像 + 无气泡直接排版 + 底部小灰图标操作栏
-// - 长按消息 → contextMenu（复制 / 选择文本 / 重新生成）
+// - 长按消息 → contextMenu（复制 / 选择文本 / 分享 / 重新生成）
 
 struct MessageBubble: View {
     let message: ChatMessage
@@ -72,11 +72,21 @@ struct MessageBubble: View {
         message.text
     }
 
-    // MARK: 用户气泡（右对齐，浅灰蓝 + 深色文字，DeepSeek 式）
+    // MARK: 用户气泡（右对齐；玻璃风 / 纯色风可在设置切换）
 
     /// 用户气泡最大宽度：随屏幕自适应（屏宽的 82%，小屏不挤、大屏不散）
     private var userBubbleMaxWidth: CGFloat {
         (UIScreen.main.bounds.width - 28) * 0.82
+    }
+
+    /// iOS 聊天惯例：右下角小圆角作"尾巴"，其余大圆角
+    private var userBubbleShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            cornerRadii: .init(
+                topLeading: 18, bottomLeading: 18,
+                bottomTrailing: 6, topTrailing: 18),
+            style: .continuous
+        )
     }
 
     private var userBubble: some View {
@@ -85,23 +95,25 @@ struct MessageBubble: View {
                 imageGrid
             }
             if !message.text.isEmpty {
-                Text(message.text)
+                let text = Text(message.text)
                     .font(.system(size: settings.chatFontSize + 0.5))
                     .foregroundStyle(Color.onUserBubble)
                     .textSelection(.enabled)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(
-                        // iOS 聊天惯例：右下角小圆角作“尾巴”，其余大圆角
-                        UnevenRoundedRectangle(
-                            cornerRadii: .init(
-                                topLeading: 18, bottomLeading: 18,
-                                bottomTrailing: 6, topTrailing: 18),
-                            style: .continuous
-                        )
-                        .fill(Color.userBubble)
-                    )
-                    .frame(maxWidth: userBubbleMaxWidth, alignment: .trailing)
+
+                if settings.userBubbleStyle == 0 {
+                    // 玻璃风：液态玻璃容器 + 品牌微染（折射底部弥散色）
+                    text
+                        .background(userBubbleShape.fill(Color.userBubbleFill))
+                        .overlay(userBubbleShape.strokeBorder(Color.glassStroke, lineWidth: 1))
+                        .frame(maxWidth: userBubbleMaxWidth, alignment: .trailing)
+                } else {
+                    // 纯色风：DeepSeek 式浅灰蓝实底
+                    text
+                        .background(userBubbleShape.fill(Color.userBubbleSolid))
+                        .frame(maxWidth: userBubbleMaxWidth, alignment: .trailing)
+                }
             }
             if showTimestamp {
                 timestampText
@@ -236,7 +248,7 @@ struct MessageBubble: View {
 
     private var aiAvatar: some View {
         ZStack {
-            Circle().fill(Color.brand)
+            Circle().fill(Color.brandGradient)
             Text("N")
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundStyle(Color.white)
@@ -265,6 +277,13 @@ struct MessageBubble: View {
                         .foregroundStyle(Color.textTertiary)
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.85))
+
+                // 分享（系统分享面板）
+                ShareLink(item: message.text) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.textTertiary)
+                }
             }
 
             if isLatestAssistant, let onRegenerate {
@@ -302,6 +321,10 @@ struct MessageBubble: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.toolChipBG)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.glassStroke, lineWidth: 1)
         )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -469,5 +492,6 @@ struct ToolCallRow: View {
         .background(
             Capsule().fill(Color.toolChipBG)
         )
+        .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
     }
 }

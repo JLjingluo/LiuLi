@@ -33,8 +33,9 @@ struct RootView: View {
                     .tag(AppTab.settings)
             }
         }
-        // 动态主题色（切主题后导航/Tab 高亮同步过渡）
+        // 动态主题色（切主题后导航/Tab 高亮同步过渡；玻璃强度切换平滑跟随）
         .tint(settings.theme.brand)
         .animation(.easeInOut(duration: 0.3), value: settings.themeID)
+        .animation(.easeInOut(duration: 0.3), value: settings.glassIntensity)
     }
 }

@@ -73,6 +73,25 @@ struct SettingsView: View {
             .font(.system(size: 14))
             .foregroundStyle(Color.textPrimary)
 
+            // 玻璃强度（3 档：全局缩放玻璃高光与描边）
+            Picker("玻璃强度", selection: $settings.glassIntensity) {
+                Text("弱").tag(0)
+                Text("标准").tag(1)
+                Text("强").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .font(.system(size: 14))
+            .foregroundStyle(Color.textPrimary)
+
+            // 用户气泡风格（玻璃微染 / DeepSeek 纯色）
+            Picker("气泡风格", selection: $settings.userBubbleStyle) {
+                Text("玻璃").tag(0)
+                Text("纯色").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .font(.system(size: 14))
+            .foregroundStyle(Color.textPrimary)
+
             Toggle("显示 AI 头像", isOn: $settings.showAIavatar)
                 .font(.system(size: 14))
                 .foregroundStyle(Color.textPrimary)
@@ -85,6 +104,9 @@ struct SettingsView: View {
             Toggle("按钮触感反馈", isOn: $settings.hapticsEnabled)
                 .font(.system(size: 14))
                 .foregroundStyle(Color.textPrimary)
+            Toggle("回车直接发送", isOn: $settings.enterToSend)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.textPrimary)
             Toggle("生成时自动跟随", isOn: $settings.autoFollowEnabled)
                 .font(.system(size: 14))
                 .foregroundStyle(Color.textPrimary)
@@ -94,7 +116,7 @@ struct SettingsView: View {
         } header: {
             Text("外观")
         } footer: {
-            Text("主题色即时切换并全局生效；字号同步应用到消息正文与 Markdown；关闭「生成时自动跟随」后可翻阅历史不被打断，右下角会出现回底按钮。")
+            Text("主题色与玻璃强度即时切换并全局生效；字号同步应用到消息正文与 Markdown；关闭「生成时自动跟随」后可翻阅历史不被打断，输入栏上方会出现回底按钮。")
         }
         .listRowBackground(Color.surfaceCard)
     }

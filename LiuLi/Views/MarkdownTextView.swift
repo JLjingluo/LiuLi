@@ -248,14 +248,7 @@ struct CodeBlockView: View {
                     .padding(11)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.toolChipBG)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.glassStroke, lineWidth: 1)
-        )
+        .liquidGlass(cornerRadius: 13, tinted: true)
         .sheet(isPresented: $showPreview) {
             HTMLPreviewSheet(title: "代码预览", html: content)
         }

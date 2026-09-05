@@ -61,6 +61,10 @@ final class AppSettings: ObservableObject {
         // v1.7.1 交互自定义
         static let autoFollowEnabled = "settings.autoFollowEnabled"
         static let showTimestamps = "settings.showTimestamps"
+        // v2.0 液态玻璃重写版
+        static let glassIntensity = "settings.glassIntensity"   // 0=弱 1=标准 2=强
+        static let userBubbleStyle = "settings.userBubbleStyle" // 0=玻璃 1=纯色
+        static let enterToSend = "settings.enterToSend"
     }
 
     // MARK: 默认注入提示词（设置页可编辑，可一键恢复）
@@ -224,6 +228,22 @@ final class AppSettings: ObservableObject {
     @Published var showTimestamps: Bool {
         didSet { d.set(showTimestamps, forKey: Keys.showTimestamps) }
     }
+    // MARK: v2.0 液态玻璃
+    /// 玻璃强度（0=弱 / 1=标准 / 2=强）
+    @Published var glassIntensity: Int {
+        didSet {
+            d.set(glassIntensity, forKey: Keys.glassIntensity)
+            applyTheme()
+        }
+    }
+    /// 用户气泡风格（0=玻璃 / 1=纯色）
+    @Published var userBubbleStyle: Int {
+        didSet { d.set(userBubbleStyle, forKey: Keys.userBubbleStyle) }
+    }
+    /// 回车直接发送（外接键盘时）
+    @Published var enterToSend: Bool {
+        didSet { d.set(enterToSend, forKey: Keys.enterToSend) }
+    }
     /// 用户是否手动改过单价（决定切模型时是否自动跟随建议价）
     private var pricingCustomized: Bool
     /// 正在自动写入建议价（避免误标为「用户手动改价」）
@@ -340,12 +360,19 @@ final class AppSettings: ObservableObject {
         self.defaultExpandReasoning = defaults.object(forKey: Keys.defaultExpandReasoning) as? Bool ?? false
         self.autoFollowEnabled = defaults.object(forKey: Keys.autoFollowEnabled) as? Bool ?? true
         self.showTimestamps = defaults.object(forKey: Keys.showTimestamps) as? Bool ?? false
+        // v2.0 液态玻璃
+        let storedGlass = defaults.object(forKey: Keys.glassIntensity) as? Int ?? 1
+        self.glassIntensity = (0...2).contains(storedGlass) ? storedGlass : 1
+        let storedBubble = defaults.object(forKey: Keys.userBubbleStyle) as? Int ?? 0
+        self.userBubbleStyle = (0...1).contains(storedBubble) ? storedBubble : 0
+        self.enterToSend = defaults.object(forKey: Keys.enterToSend) as? Bool ?? true
         applyTheme()
     }
 
-    /// 把当前主题写入全局 Color 扩展（Color.brand 等随之变化）
+    /// 把当前主题与玻璃强度写入全局（Color.brand / CurrentTheme.glassBoost 随之变化）
     private func applyTheme() {
         CurrentTheme.palette = theme
+        CurrentTheme.glassBoost = [0.55, 1.0, 1.45][max(0, min(2, glassIntensity))]
     }
 
     /// 恢复某个模式的默认注入提示词

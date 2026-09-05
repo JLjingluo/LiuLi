@@ -8,14 +8,14 @@ enum AppInfo {
     static let tagline = "AI 编程与对话助手"
 }
 
-// MARK: - 多主题系统（v1.7）
+// MARK: - 多主题系统 v2（液态玻璃 · 8 套配色）
 //
-// 设计原则：
-// 1. 全 App 只有一个强调色：主题色（6 套可选，即时切换）
-// 2. 背景：近白微灰 + 主题色弥散（供液态玻璃折射出层次）
-// 3. 消息：用户浅灰蓝气泡（深色文字，DeepSeek 式）/ AI 无气泡直接排版
-// 4. 悬浮层（顶栏 / 输入栏 / Tab 栏 / 发送键）：液态玻璃
-// 5. 图标：细线系统符号，小号、灰色为主，主题色点缀
+// 设计原则（对标 DeepSeek 舒适感 + iOS 26 液态玻璃语言）：
+// 1. 全 App 单一强调色：主题色（8 套，即时切换）
+// 2. 背景：近白微灰 + 主题色弥散（为玻璃提供折射内容）
+// 3. 消息：用户玻璃气泡（品牌色微染）/ AI 无气泡直接排版
+// 4. 悬浮层（顶栏/输入栏/回底箭头/卡片）：液态玻璃四层模拟
+// 5. 玻璃强度三档（弱/标准/强），全局即时生效
 
 /// 一套主题配色（强调色 + 背景弥散斑）
 struct ThemePalette: Identifiable, Equatable {
@@ -23,6 +23,8 @@ struct ThemePalette: Identifiable, Equatable {
     let name: String
     /// 唯一强调色（按钮 / 图标 / 高亮）
     let brand: Color
+    /// 品牌色的浅色端（渐变用）
+    let brandLight: Color
     /// 背景弥散斑 1（大）
     let blobA: Color
     /// 背景弥散斑 2（小）
@@ -37,28 +39,44 @@ extension ThemePalette {
     static let all: [ThemePalette] = [
         ThemePalette(id: "nexus", name: "晴空蓝",
                      brand: Color(red: 0.302, green: 0.420, blue: 0.996),
+                     brandLight: Color(red: 0.490, green: 0.706, blue: 1.000),
                      blobA: Color(red: 0.302, green: 0.420, blue: 0.996),
                      blobB: Color(red: 0.490, green: 0.706, blue: 1.000)),
         ThemePalette(id: "indigo", name: "靛夜紫",
                      brand: Color(red: 0.431, green: 0.353, blue: 0.902),
+                     brandLight: Color(red: 0.596, green: 0.545, blue: 0.980),
                      blobA: Color(red: 0.431, green: 0.353, blue: 0.902),
                      blobB: Color(red: 0.596, green: 0.545, blue: 0.980)),
         ThemePalette(id: "mint", name: "青竹碧",
                      brand: Color(red: 0.055, green: 0.639, blue: 0.467),
+                     brandLight: Color(red: 0.208, green: 0.796, blue: 0.690),
                      blobA: Color(red: 0.055, green: 0.639, blue: 0.467),
                      blobB: Color(red: 0.208, green: 0.796, blue: 0.690)),
         ThemePalette(id: "coral", name: "落日橙",
                      brand: Color(red: 0.976, green: 0.420, blue: 0.290),
+                     brandLight: Color(red: 1.000, green: 0.651, blue: 0.420),
                      blobA: Color(red: 0.976, green: 0.420, blue: 0.290),
                      blobB: Color(red: 1.000, green: 0.651, blue: 0.420)),
         ThemePalette(id: "sakura", name: "樱花粉",
                      brand: Color(red: 0.906, green: 0.357, blue: 0.573),
+                     brandLight: Color(red: 1.000, green: 0.620, blue: 0.733),
                      blobA: Color(red: 0.906, green: 0.357, blue: 0.573),
                      blobB: Color(red: 1.000, green: 0.620, blue: 0.733)),
         ThemePalette(id: "gold", name: "琥珀金",
                      brand: Color(red: 0.847, green: 0.596, blue: 0.176),
+                     brandLight: Color(red: 0.976, green: 0.812, blue: 0.522),
                      blobA: Color(red: 0.847, green: 0.596, blue: 0.176),
-                     blobB: Color(red: 0.976, green: 0.812, blue: 0.522))
+                     blobB: Color(red: 0.976, green: 0.812, blue: 0.522)),
+        ThemePalette(id: "graphite", name: "静谧墨",
+                     brand: Color(red: 0.235, green: 0.251, blue: 0.286),
+                     brandLight: Color(red: 0.510, green: 0.537, blue: 0.580),
+                     blobA: Color(red: 0.235, green: 0.251, blue: 0.286),
+                     blobB: Color(red: 0.510, green: 0.537, blue: 0.580)),
+        ThemePalette(id: "ocean", name: "深海青",
+                     brand: Color(red: 0.000, green: 0.476, blue: 0.616),
+                     brandLight: Color(red: 0.220, green: 0.710, blue: 0.870),
+                     blobA: Color(red: 0.000, green: 0.476, blue: 0.616),
+                     blobB: Color(red: 0.220, green: 0.710, blue: 0.870))
     ]
 
     /// 按 id 取主题（未知 id 回退默认）
@@ -71,16 +89,17 @@ extension ThemePalette {
 enum CurrentTheme {
     private static let lock = NSLock()
     private static var _palette: ThemePalette = .palette(for: "nexus")
+    /// 玻璃强度（0=弱 / 1=标准 / 2=强），影响玻璃高光与描边的不透明度倍率
+    private static var _glassBoost: Double = 1.0
 
     static var palette: ThemePalette {
-        get {
-            lock.lock(); defer { lock.unlock() }
-            return _palette
-        }
-        set {
-            lock.lock(); defer { lock.unlock() }
-            _palette = newValue
-        }
+        get { lock.lock(); defer { lock.unlock() }; return _palette }
+        set { lock.lock(); defer { lock.unlock() }; _palette = newValue }
+    }
+
+    static var glassBoost: Double {
+        get { lock.lock(); defer { lock.unlock() }; return _glassBoost }
+        set { lock.lock(); defer { lock.unlock() }; _glassBoost = newValue }
     }
 }
 
@@ -90,6 +109,12 @@ extension Color {
 
     /// 当前主题强调色（品牌色）
     static var brand: Color { CurrentTheme.palette.brand }
+
+    /// 品牌渐变（品牌色 → 浅端，按钮/头像质感）
+    static var brandGradient: LinearGradient {
+        LinearGradient(colors: [CurrentTheme.palette.brand, CurrentTheme.palette.brandLight],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
 
     /// 主题色淡底（选中态 / 提示底色）
     static var brandSoft: Color {
@@ -115,9 +140,11 @@ extension Color {
         light: UIColor(red: 1, green: 1, blue: 1, alpha: 0.80),
         dark: UIColor(red: 1, green: 1, blue: 1, alpha: 0.07))
 
-    /// 玻璃描边
+    /// 玻璃描边（随玻璃强度缩放）
     static var glassStroke: Color {
-        uiAdaptive(light: Color.black.opacity(0.07), dark: Color.white.opacity(0.14))
+        let b = CurrentTheme.glassBoost
+        return uiAdaptive(light: Color.black.opacity(0.07 * b),
+                          dark: Color.white.opacity(0.14 * b))
     }
 
     /// 主文本（浅：近黑 / 深：近白）
@@ -140,12 +167,18 @@ extension Color {
         light: UIColor(red: 0, green: 0, blue: 0, alpha: 0.06),
         dark: UIColor(red: 1, green: 1, blue: 1, alpha: 0.08))
 
-    /// 用户气泡（浅灰蓝，DeepSeek 式深字气泡，中性色不随主题变，保证可读性）
-    static let userBubble = dyn(
+    /// 用户气泡（玻璃风：品牌色微染玻璃；纯色风：浅灰蓝）
+    static var userBubbleFill: Color {
+        uiAdaptive(light: CurrentTheme.palette.brand.opacity(0.10),
+                   dark: CurrentTheme.palette.brand.opacity(0.18))
+    }
+
+    /// 用户气泡纯色风（浅灰蓝，DeepSeek 式）
+    static let userBubbleSolid = dyn(
         light: UIColor(red: 0.930, green: 0.942, blue: 0.965, alpha: 1),
         dark: UIColor(red: 0.13, green: 0.14, blue: 0.18, alpha: 1))
 
-    /// 用户气泡内文字（深色）
+    /// 用户气泡内文字
     static let onUserBubble = dyn(
         light: UIColor(red: 0.11, green: 0.12, blue: 0.15, alpha: 1),
         dark: UIColor(red: 0.94, green: 0.95, blue: 0.97, alpha: 1))
@@ -161,11 +194,6 @@ extension Color {
         light: UIColor(red: 0.78, green: 0.22, blue: 0.18, alpha: 1),
         dark: UIColor(red: 1.0, green: 0.52, blue: 0.46, alpha: 1))
 
-    /// 代码块底色
-    static let codeBG = dyn(
-        light: UIColor(red: 0.956, green: 0.961, blue: 0.966, alpha: 1),
-        dark: UIColor(red: 0.09, green: 0.10, blue: 0.13, alpha: 1))
-
     /// 主题色上的文字（始终白色）
     static let onBrand = Color.white
 
@@ -178,12 +206,6 @@ extension Color {
     static var liuliTextPrimary: Color { Color.textPrimary }
     static var liuliTextSecondary: Color { Color.textSecondary }
     static var liuliTextTertiary: Color { Color.textTertiary }
-
-    /// 旧渐变（保留 API，实际为纯主题色）
-    static var brandGradient: LinearGradient {
-        LinearGradient(colors: [Color.brand, Color.brand],
-                       startPoint: .top, endPoint: .bottom)
-    }
 
     /// 任意 Color 的深浅适配包装
     static func uiAdaptive(light: Color, dark: Color) -> Color {
@@ -216,7 +238,7 @@ enum Haptics {
     }
 }
 
-// MARK: - 按压反馈按钮样式（按下缩放 + 变淡，解决“点了没反应”的观感）
+// MARK: - 按压反馈按钮样式（按下缩放 + 变淡）
 
 struct PressableButtonStyle: ButtonStyle {
     var scale: CGFloat = 0.90
@@ -229,18 +251,23 @@ struct PressableButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - 液态玻璃（Liquid Glass）
+// MARK: - 液态玻璃系统 v2
 //
-// iOS 26+：原生 glassEffect（真·液态玻璃：实时折射、高光、形变融合）
-// iOS 17~25：四层视觉模拟——
-//   ① 材质模糊（玻璃透光）② 镜面光泽渐变（顶部高光→透明→底部反光）
-//   ③ 边缘折射描边（左上亮→右下暗）④ 柔和投影（悬浮感）
+// iOS 26+：原生 glassEffect（实时折射、高光、形变融合；interactive 提供点击液态反馈）
+// iOS 17~25：四层视觉模拟（借鉴 FabBar / LiquidGlassReference 社区方案）——
+//   ① 材质模糊（玻璃透光）        ultraThinMaterial
+//   ② 镜面光泽渐变                顶部高光 → 透明 → 底部反光
+//   ③ 边缘折射描边                左上亮 → 右下暗（色散感）
+//   ④ 柔和投影                    悬浮感
+// 玻璃强度（弱/标准/强）全局缩放 ②③ 层的不透明度。
 
 struct LiquidGlassStyle: ViewModifier {
     var cornerRadius: CGFloat = 18
     var padding: CGFloat = 0
     /// iOS 26 原生玻璃 interactive（点击有液态融合反馈）
     var interactive = false
+    /// 品牌色微染（输入胶囊等主交互面）
+    var tinted = false
 
     func body(content: Content) -> some View {
         let shaped = content.padding(padding)
@@ -274,21 +301,27 @@ struct LiquidGlassStyle: ViewModifier {
 
     /// iOS 17~25 降级：四层液态玻璃模拟
     private func legacy(_ content: some View) -> some View {
-        content
+        let boost = CurrentTheme.glassBoost
+        return content
             .background(
                 ZStack {
                     // ① 材质模糊（透光磨砂）
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
-                    // ② 镜面光泽（顶部高光 → 透明 → 底部反光，玻璃折射感）
+                    // ①b 品牌微染（可选，主交互面用）
+                    if tinted {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(Color.brand.opacity(0.05 * boost))
+                    }
+                    // ② 镜面光泽（顶部高光 → 透明 → 底部反光）
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             LinearGradient(
                                 stops: [
-                                    .init(color: .white.opacity(0.50), location: 0.00),
-                                    .init(color: .white.opacity(0.10), location: 0.20),
+                                    .init(color: .white.opacity(0.50 * boost), location: 0.00),
+                                    .init(color: .white.opacity(0.10 * boost), location: 0.20),
                                     .init(color: .white.opacity(0.00), location: 0.50),
-                                    .init(color: .white.opacity(0.14), location: 1.00)
+                                    .init(color: .white.opacity(0.14 * boost), location: 1.00)
                                 ],
                                 startPoint: .top, endPoint: .bottom))
                 }
@@ -299,22 +332,24 @@ struct LiquidGlassStyle: ViewModifier {
                     .strokeBorder(
                         LinearGradient(
                             stops: [
-                                .init(color: .white.opacity(0.80), location: 0.00),
-                                .init(color: .white.opacity(0.12), location: 0.45),
-                                .init(color: .white.opacity(0.38), location: 1.00)
+                                .init(color: .white.opacity(0.80 * boost), location: 0.00),
+                                .init(color: .white.opacity(0.12 * boost), location: 0.45),
+                                .init(color: .white.opacity(0.38 * boost), location: 1.00)
                             ],
                             startPoint: .topLeading, endPoint: .bottomTrailing),
                         lineWidth: 1)
             )
             // ④ 柔和投影（玻璃悬浮感）
-            .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+            .shadow(color: Color.black.opacity(0.05 * boost), radius: 8, y: 4)
     }
 }
 
 extension View {
     /// 液态玻璃容器（iOS 26 原生 glassEffect，旧系统四层模拟）
-    func liquidGlass(cornerRadius: CGFloat = 18, padding: CGFloat = 0, interactive: Bool = false) -> some View {
-        modifier(LiquidGlassStyle(cornerRadius: cornerRadius, padding: padding, interactive: interactive))
+    func liquidGlass(cornerRadius: CGFloat = 18, padding: CGFloat = 0,
+                     interactive: Bool = false, tinted: Bool = false) -> some View {
+        modifier(LiquidGlassStyle(cornerRadius: cornerRadius, padding: padding,
+                                  interactive: interactive, tinted: tinted))
     }
 
     @available(*, deprecated, renamed: "liquidGlass(cornerRadius:padding:)")
@@ -374,7 +409,7 @@ struct GlassBadge: View {
     }
 }
 
-// MARK: - 品牌胶囊按钮（保留 API，实际为主题色实心 / 玻璃空心）
+// MARK: - 品牌胶囊按钮
 
 struct BrandCapsuleButton: View {
     let title: String
@@ -396,7 +431,7 @@ struct BrandCapsuleButton: View {
             .padding(.vertical, 9)
             .foregroundStyle(prominent ? Color.onBrand : Color.textPrimary)
             .background(
-                Capsule().fill(prominent ? AnyShapeStyle(Color.brand) : AnyShapeStyle(Color.surfaceCard))
+                Capsule().fill(prominent ? AnyShapeStyle(Color.brandGradient) : AnyShapeStyle(Color.surfaceCard))
             )
             .overlay(Capsule().strokeBorder(Color.glassStroke, lineWidth: 1))
         }

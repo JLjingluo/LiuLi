@@ -210,7 +210,7 @@
 		};
 		4C4C00000000000000000410 /* NexusWidget */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4C4C00000000000000000412 /* Build configuration list for PBXNativeTarget "NexusWidget" */;
+			buildConfigurationList = 4C4C00000000000000000460 /* Build configuration list for PBXNativeTarget "NexusWidget" */;
 			buildPhases = (
 				4C4C00000000000000000420 /* Sources */,
 				4C4C00000000000000000421 /* Frameworks */,
@@ -581,7 +581,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4C4C00000000000000000412 /* Build configuration list for PBXNativeTarget "NexusWidget" */ = {
+		4C4C00000000000000000460 /* Build configuration list for PBXNativeTarget "NexusWidget" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4C4C00000000000000000451 /* Debug */,
